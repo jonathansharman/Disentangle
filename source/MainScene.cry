@@ -12,6 +12,26 @@ const NODE_BORDER = 2.0;
 
 const EDGE_WIDTH = 3.5;
 
+const BAD_EDGE_R = 170;
+const BAD_EDGE_G = 0;
+const BAD_EDGE_B = 0;
+
+const GOOD_EDGE_R = 0;
+const GOOD_EDGE_G = 80;
+const GOOD_EDGE_B = 160;
+
+const BAD_NODE_R = 212;
+const BAD_NODE_G = 0;
+const BAD_NODE_B = 0;
+
+const GOOD_NODE_R = 0;
+const GOOD_NODE_G = 128;
+const GOOD_NODE_B = 255;
+
+const FLASH_NODE_R = 128;
+const FLASH_NODE_G = 192;
+const FLASH_NODE_B = 255;
+
 class MainScene : AbstractScene {
 	field clickedNode;
 
@@ -230,11 +250,13 @@ class MainScene : AbstractScene {
 	}
 
 	function render() {
-		Graphics2D.Draw.fill(255, 255, 255);
+		Graphics2D.Draw.fill(212, 212, 212);
 
 		// Draw edges.
 		for (i = 0; i < this.edges.length; ++i) {
-			edgeColor = this.intersectMap[i] ? [192, 0, 0] : [0, 192, 0];
+			edgeColor = this.intersectMap[i]
+				? [BAD_EDGE_R, BAD_EDGE_G, BAD_EDGE_B]
+				: [GOOD_EDGE_R, GOOD_EDGE_G, GOOD_EDGE_B];
 			Graphics2D.Draw.line
 				( this.nodes[this.edges[i][0]][0], this.nodes[this.edges[i][0]][1]
 				, this.nodes[this.edges[i][1]][0], this.nodes[this.edges[i][1]][1]
@@ -246,15 +268,19 @@ class MainScene : AbstractScene {
 		// Draw nodes.
 		for (i = 0; i < this.nodeCount; ++i) {
 			if (this.solved) {
-				nodeColor = (this.winTimer / 10) % 2 == 0 ? [0, 255, 0] : [255, 255, 255];
+				nodeColor = (this.winTimer / 10) % 2 == 0
+					? [GOOD_NODE_R, GOOD_NODE_G, GOOD_NODE_B]
+					: [FLASH_NODE_R, FLASH_NODE_G, FLASH_NODE_B];
 			} else {
-				redNode = false;
+				badNode = false;
 				for (j = 0; j < this.edges.length; ++j) {
 					if (this.edges[j][0] == i || this.edges[j][1] == i) {
-						redNode = redNode || this.intersectMap[j];
+						badNode = badNode || this.intersectMap[j];
 					}
 				}
-				nodeColor = redNode ? [255, 0, 0] : [0, 255, 0];
+				nodeColor = badNode
+					? [BAD_NODE_R, BAD_NODE_G, BAD_NODE_B]
+					: [GOOD_NODE_R, GOOD_NODE_G, GOOD_NODE_B];
 			}
 			Graphics2D.Draw.ellipse
 				( this.nodes[i][0] - NODE_RADIUS, this.nodes[i][1] - NODE_RADIUS
