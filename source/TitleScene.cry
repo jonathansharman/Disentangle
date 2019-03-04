@@ -1,0 +1,38 @@
+import Graphics2D;
+import Graphics2DText;
+import TwoCansAlpha2;
+
+class TitleScene : AbstractScene {
+	field font = FontResource
+		.fromSystem("Times New Roman")
+		.getRenderer()
+		.setSize(20)
+		.setColor(0, 0, 0);
+	field title;
+	field instructions;
+
+	constructor() : base() {
+		this.title = this.font.setSize(36).render("Disentangle");
+		this.instructions = this.font.setSize(20).render("Press 1 for relaxation mode, 2 for timed mode.");
+	}
+
+	function update(inputManager, events) {
+		if (inputManager.isKeyPressed(KeyboardKey.NUM_1)) {
+			this.switchScene(new MainScene(false));
+		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_2)) {
+			this.switchScene(new MainScene(true));
+		}
+	}
+
+	function render() {
+		Graphics2D.Draw.fill(212, 212, 212);
+		this.title.draw
+			( X_RES / 2 - this.title.width / 2
+			, Y_RES / 3 - this.title.height / 2
+			);
+		this.instructions.draw
+			( X_RES / 2 - this.instructions.width / 2
+			, 2 * Y_RES / 3 - this.instructions.height / 2
+			);
+	}
+}

@@ -32,17 +32,22 @@ const FLASH_NODE_R = 128;
 const FLASH_NODE_G = 192;
 const FLASH_NODE_B = 255;
 
+const MAX_TIME_PER_EDGE = 100;
+
 class MainScene : AbstractScene {
 	field clickedNode;
-
 	field nodeCount = 8;
 	field nodes;
 	field edges;
 	field solved = false;
 	field intersectMap;
 	field winTimer = 0;
-	field font = FontResource.fromSystem("Arial").getRenderer().setSize(16);
-	field level;
+	field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(20).setColor(0, 0, 0);
+	field levelText;
+	field resetText = this.font.render("Press Esc to return to main menu.");
+
+	field timed;
+	field levelTimer;
 
 	// Checks for intersection between line segments.
 	// Adapted from https://stackoverflow.com/a/1968345/3217185.
@@ -131,16 +136,27 @@ class MainScene : AbstractScene {
 			}
 		} while (!foundIntersection);
 
-		this.level = this.font.render(this.nodes.length);
+		this.levelText = this.font.render(this.nodes.length);
+
+		this.levelTimer = MAX_TIME_PER_EDGE * this.edges.length;
 	}
 
-	constructor() : base() {
-		this.font.setColor(0, 0, 0);
+	constructor(timed) : base() {
+		this.timed = timed;
 
 		this.reset();
 	}
 
 	function update(inputManager, events) {
+		if (inputManager.isKeyPressed(KeyboardKey.ESCAPE)) {
+			this.switchScene(new TitleScene());
+			return;
+		}
+
+		if (this.timed && this.winTimer == 0) {
+			--this.levelTimer;
+		}
+
 		if (this.winTimer > 0) {
 			if (this.winTimer == 1) {
 				++this.nodeCount;
@@ -234,7 +250,7 @@ class MainScene : AbstractScene {
 		}
 
 		// Clicked node follows mouse.
-		if (this.clickedNode != null) {
+		if (this.clickedNode != null && (!this.timed || this.levelTimer > 0)) {
 			this.nodes[this.clickedNode][0] = xMouse;
 			this.nodes[this.clickedNode][1] = yMouse;
 		}
@@ -256,10 +272,24 @@ class MainScene : AbstractScene {
 	}
 
 	function render() {
-		Graphics2D.Draw.fill(212, 212, 212);
+		// Draw timer, if timed.
+		if (this.timed) {
+			Graphics2D.Draw.fill(212, 212, 212);
+			if (this.levelTimer > 0) {
+				Graphics2D.Draw.rectangle
+					( 0, 0
+					, X_RES * this.levelTimer / (MAX_TIME_PER_EDGE * this.edges.length), 20
+					, 128, 128, 128
+					);
+			} else {
+				this.resetText.draw(0, 0);
+			}
+		} else {
+			Graphics2D.Draw.fill(212, 212, 212);
+		}
 
 		// Draw current number of nodes.
-		this.level.draw(0, Y_RES - this.level.height);
+		this.levelText.draw(0, Y_RES - this.levelText.height);
 
 		// Draw edges.
 		for (i = 0; i < this.edges.length; ++i) {

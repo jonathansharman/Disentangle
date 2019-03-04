@@ -24,7 +24,7 @@
     
     <var type="string">
       <id>initial_scene</id>
-      <value>MainScene</value>
+      <value>TitleScene</value>
     </var>
     
     <var type="integer">
