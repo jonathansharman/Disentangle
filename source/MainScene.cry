@@ -41,6 +41,8 @@ class MainScene : AbstractScene {
 	field solved = false;
 	field intersectMap;
 	field winTimer = 0;
+	field font = FontResource.fromSystem("Arial").getRenderer().setSize(16);
+	field level;
 
 	// Checks for intersection between line segments.
 	// Adapted from https://stackoverflow.com/a/1968345/3217185.
@@ -128,9 +130,13 @@ class MainScene : AbstractScene {
 				}
 			}
 		} while (!foundIntersection);
+
+		this.level = this.font.render(this.nodes.length);
 	}
 
 	constructor() : base() {
+		this.font.setColor(0, 0, 0);
+
 		this.reset();
 	}
 
@@ -251,6 +257,9 @@ class MainScene : AbstractScene {
 
 	function render() {
 		Graphics2D.Draw.fill(212, 212, 212);
+
+		// Draw current number of nodes.
+		this.level.draw(0, Y_RES - this.level.height);
 
 		// Draw edges.
 		for (i = 0; i < this.edges.length; ++i) {
