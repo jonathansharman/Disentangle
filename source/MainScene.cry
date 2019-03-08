@@ -7,12 +7,12 @@ import TwoCansAlpha2;
 const X_RES = 640;
 const Y_RES = 480;
 
-const DFLT_NODE_COUNT = 10;
-
 const NODE_RADIUS = 10.0;
 const NODE_BORDER = 2.0;
 
 const EDGE_WIDTH = 3.5;
+
+const BAR_HEIGHT = 20;
 
 const BAD_EDGE_R = 170;
 const BAD_EDGE_G = 0;
@@ -36,7 +36,10 @@ const FLASH_NODE_B = 255;
 
 const MAX_TIME_PER_EDGE = 100;
 
-const BAR_HEIGHT = 20;
+const DFLT_NODE_COUNT = 8;
+
+// Helps avoid false positives at endpoints.
+const COLLISION_EPSILON = 0.01;
 
 enum GameMode { RELAX, TIMED, MOVES }
 
@@ -69,17 +72,48 @@ class MainScene : AbstractScene {
 	// Checks for intersection between line segments.
 	// Adapted from https://stackoverflow.com/a/1968345/3217185.
 	function intersect(edge0, edge1) {
-		// Helps avoid false positives at endpoints.
-		epsilon = 0.01;
+		if (this.nodes[edge0[0]][0] <= this.nodes[edge0[1]][0]) {
+			p0_x = this.nodes[edge0[0]][0];
+			p0_y = this.nodes[edge0[0]][1];
+			p1_x = this.nodes[edge0[1]][0];
+			p1_y = this.nodes[edge0[1]][1];
+		} else {
+			p0_x = this.nodes[edge0[1]][0];
+			p0_y = this.nodes[edge0[1]][1];
+			p1_x = this.nodes[edge0[0]][0];
+			p1_y = this.nodes[edge0[0]][1];
+		}
+		// p0 is the left-most node of edge0.
+		if (this.nodes[edge1[0]][0] <= this.nodes[edge1[1]][0]) {
+			p2_x = this.nodes[edge1[0]][0];
+			p2_y = this.nodes[edge1[0]][1];
+			p3_x = this.nodes[edge1[1]][0];
+			p3_y = this.nodes[edge1[1]][1];
+		} else {
+			p2_x = this.nodes[edge1[1]][0];
+			p2_y = this.nodes[edge1[1]][1];
+			p3_x = this.nodes[edge1[0]][0];
+			p3_y = this.nodes[edge1[0]][1];
+		}
+		// p2 is the left-most node of edge1.
 
-		p0_x = this.nodes[edge0[0]][0];
-		p0_y = this.nodes[edge0[0]][1];
-		p1_x = this.nodes[edge0[1]][0];
-		p1_y = this.nodes[edge0[1]][1];
-		p2_x = this.nodes[edge1[0]][0];
-		p2_y = this.nodes[edge1[0]][1];
-		p3_x = this.nodes[edge1[1]][0];
-		p3_y = this.nodes[edge1[1]][1];
+		// Rule out intersection if one edge is completely to one side of the other.
+		if (p1_x < p2_x) {
+			// edge0 left of edge1.
+			return false;
+		}
+		if (p0_x > p3_x) {
+			// edge0 right of edge1.
+			return false;
+		}
+		if (Math.max(p0_y, p1_y) < Math.min(p2_y, p3_y)) {
+			// edge0 above edge1.
+			return false;
+		}
+		if (Math.min(p0_y, p1_y) > Math.max(p2_y, p3_y)) {
+			// edge0 below edge1.
+			return false;
+		}
 
 	    s1_x = p1_x - p0_x;
 		s1_y = p1_y - p0_y;
@@ -95,7 +129,8 @@ class MainScene : AbstractScene {
 		s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / denominator;
 		t = ( s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / denominator;
 
-		return s >= epsilon && s <= (1.0 - epsilon) && t >= epsilon && t <= (1 - epsilon);
+		return s >= COLLISION_EPSILON && s <= (1.0 - COLLISION_EPSILON)
+			&& t >= COLLISION_EPSILON && t <= (1 - COLLISION_EPSILON);
 	}
 
 	// Randomize node positions.
@@ -166,13 +201,14 @@ class MainScene : AbstractScene {
 		this.movesLeft = this.nodes.length;
 	}
 
-	function antigravitate(count) {
-		for (i = 0; i < count; ++i) {
+	// Pushes nodes away from each other and away from the edges.
+	function antigravitate(iterations) {
+		for (i = 0; i < iterations; ++i) {
 			for (node : this.nodes) {
 				wallForceFactor = 0.0005;
 				vel =
 					[ wallForceFactor * (X_RES / 2 - node[0])
-					, wallForceFactor * ((Y_RES + BAR_HEIGHT) / 2 - node[1])
+					, wallForceFactor * (Y_RES / 2 - node[1])
 					];
 				for (otherNode : this.nodes) {
 					if (otherNode != node) {
@@ -189,13 +225,13 @@ class MainScene : AbstractScene {
 				node[0] += velFactor * vel[0];
 				node[1] += velFactor * vel[1];
 
-				if (node[0] < 0) {
+				if (node[0] < 0.0) {
 					node[0] = 0.0;
 				} else if (node[0] >= X_RES) {
 					node[0] = X_RES - 1.0;
 				}
-				if (node[1] < BAR_HEIGHT) {
-					node[1] = BAR_HEIGHT;
+				if (node[1] < 0.0) {
+					node[1] = 0.0;
 				} else if (node[1] >= Y_RES) {
 					node[1] = Y_RES - 1.0;
 				}
@@ -253,8 +289,8 @@ class MainScene : AbstractScene {
 			}
 		}
 
-		// Move nodes apart.
-		if (inputManager.isKeyPressed(KeyboardKey.SPACE)) {
+		// Allow free manual antigravitation if game is not over.
+		if (!this.gameOver && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
 			this.antigravitate(1);
 		}
 
@@ -264,13 +300,13 @@ class MainScene : AbstractScene {
 			this.nodes[this.clickedNode][1] = yMouse;
 		}
 
+		// Find intersections and detect solutions.
 		this.solved = true;
 		this.intersectMap = [];
 		for (i = 0; i < this.edges.length; ++i) {
 			foundIntersection = false;
-			edge = this.edges[i];
 			for (otherEdge : this.edges) {
-				if (otherEdge != edge && this.intersect(edge, otherEdge)) {
+				if (otherEdge != this.edges[i] && this.intersect(this.edges[i], otherEdge)) {
 					foundIntersection = true;
 					this.solved = false;
 					break;
@@ -297,49 +333,23 @@ class MainScene : AbstractScene {
 	}
 
 	function render() {
-		if (this.gameOver) {
-			Graphics2D.Draw.fill(212, 159, 159);
-			this.resetText.draw(0, 0);
-		} else {
-			Graphics2D.Draw.fill(212, 212, 212);
-			switch (this.gameMode) {
-				case GameMode.RELAX:
-					break;
-				case GameMode.TIMED:
-					Graphics2D.Draw.rectangle
-						( 0, 0
-						, X_RES * this.levelTimer / (MAX_TIME_PER_EDGE * this.edges.length), BAR_HEIGHT
-						, 128, 128, 128
-						);
-					break;
-				case GameMode.MOVES:
-					for (i = 0; i < this.movesLeft; ++i) {
-						start = i * X_RES / this.nodes.length + 1;
-						end = Math.min(X_RES - 1, (i + 1) * X_RES / this.nodes.length);
-						Graphics2D.Draw.rectangle
-							( start, 1
-							, end - start, BAR_HEIGHT - 1
-							, 128, 128, 128
-							);
-					}
-					break;
-			}
-		}
+		bgColor = this.gameOver ? [212, 159, 159] : [212, 212, 212];
 
-		// Draw current number of nodes.
-		this.levelText.draw(0, Y_RES - this.levelText.height);
+		Graphics2D.Draw.fill(bgColor[0], bgColor[1], bgColor[2]);
 
 		// Draw edges.
 		for (i = 0; i < this.edges.length; ++i) {
-			edgeColor = this.intersectMap[i]
-				? [BAD_EDGE_R, BAD_EDGE_G, BAD_EDGE_B]
-				: [GOOD_EDGE_R, GOOD_EDGE_G, GOOD_EDGE_B];
+			// Draw edge outline.
 			Graphics2D.Draw.line
 				( this.nodes[this.edges[i][0]][0], this.nodes[this.edges[i][0]][1]
 				, this.nodes[this.edges[i][1]][0], this.nodes[this.edges[i][1]][1]
 				, EDGE_WIDTH + 2
 				, 0, 0, 0
 				);
+			// Draw edge fill color.
+			edgeColor = this.intersectMap[i]
+				? [BAD_EDGE_R, BAD_EDGE_G, BAD_EDGE_B]
+				: [GOOD_EDGE_R, GOOD_EDGE_G, GOOD_EDGE_B];
 			Graphics2D.Draw.line
 				( this.nodes[this.edges[i][0]][0], this.nodes[this.edges[i][0]][1]
 				, this.nodes[this.edges[i][1]][0], this.nodes[this.edges[i][1]][1]
@@ -376,5 +386,49 @@ class MainScene : AbstractScene {
 				, nodeColor[0], nodeColor[1], nodeColor[2]
 				);
 		}
+
+		// Draw overlays.
+		if (this.gameOver) {
+			Graphics2D.Draw.rectangle
+				( 0, 0
+				, this.resetText.width, this.resetText.height
+				, bgColor[0], bgColor[1], bgColor[2], 192
+				);
+			this.resetText.draw(0, 0);
+		} else {
+			switch (this.gameMode) {
+				case GameMode.RELAX:
+					// Nothing special to draw in this mode.
+					break;
+				case GameMode.TIMED:
+					// Draw timer.
+					Graphics2D.Draw.rectangle
+						( 0, 0
+						, X_RES * this.levelTimer / (MAX_TIME_PER_EDGE * this.edges.length), BAR_HEIGHT
+						, 0, 0, 0, 128
+						);
+					break;
+				case GameMode.MOVES:
+					// Draw move counter.
+					for (i = 0; i < this.movesLeft; ++i) {
+						start = i * X_RES / this.nodes.length + 1;
+						end = Math.min(X_RES - 1, (i + 1) * X_RES / this.nodes.length);
+						Graphics2D.Draw.rectangle
+							( start, 1
+							, end - start, BAR_HEIGHT - 1
+							, 0, 0, 0, 128
+							);
+					}
+					break;
+			}
+		}
+
+		// Draw current number of nodes.
+		Graphics2D.Draw.rectangle
+			( 0, Y_RES - this.levelText.height
+			, this.levelText.width, this.levelText.height
+			, bgColor[0], bgColor[1], bgColor[2], 192
+			);
+		this.levelText.draw(0, Y_RES - this.levelText.height);
 	}
 }
