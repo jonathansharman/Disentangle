@@ -7,6 +7,8 @@ import TwoCansAlpha2;
 const X_RES = 640;
 const Y_RES = 480;
 
+const DFLT_NODE_COUNT = 10;
+
 const NODE_RADIUS = 10.0;
 const NODE_BORDER = 2.0;
 
@@ -34,11 +36,13 @@ const FLASH_NODE_B = 255;
 
 const MAX_TIME_PER_EDGE = 100;
 
+const BAR_HEIGHT = 20;
+
 enum GameMode { RELAX, TIMED, MOVES }
 
 class MainScene : AbstractScene {
 	field clickedNode;
-	field nodeCount = 8;
+	field nodeCount = DFLT_NODE_COUNT;
 	field nodes;
 	field edges;
 	field solved = false;
@@ -113,6 +117,7 @@ class MainScene : AbstractScene {
 			offset = Math.min(X_RES, Y_RES) / 2 - 20;
 			this.nodes.add([X_RES / 2 + offset * Math.cos(theta), Y_RES / 2 + offset * Math.sin(theta)]);
 		}
+
 		// Generate all possible edges in random order.
 		allEdges = [];
 		for (i = 0; i < this.nodeCount - 1; ++i) {
@@ -121,6 +126,7 @@ class MainScene : AbstractScene {
 			}
 		}
 		allEdges.shuffle();
+
 		// Add random non-intersecting edges to the edge list.
 		this.edges = [];
 		for (candidateEdge : allEdges) {
@@ -135,6 +141,7 @@ class MainScene : AbstractScene {
 				this.edges.add(candidateEdge);
 			}
 		}
+
 		// Randomize node positions until there's an intersection.
 		foundIntersection = false;
 		do {
@@ -149,11 +156,51 @@ class MainScene : AbstractScene {
 			}
 		} while (!foundIntersection);
 
+		// Relax nodes using antigravitation.
+		this.antigravitate(300);
+
 		this.levelText = this.font.render(this.nodes.length);
 
 		this.levelTimer = MAX_TIME_PER_EDGE * this.edges.length;
 
 		this.movesLeft = this.nodes.length;
+	}
+
+	function antigravitate(count) {
+		for (i = 0; i < count; ++i) {
+			for (node : this.nodes) {
+				wallForceFactor = 0.0005;
+				vel =
+					[ wallForceFactor * (X_RES / 2 - node[0])
+					, wallForceFactor * ((Y_RES + BAR_HEIGHT) / 2 - node[1])
+					];
+				for (otherNode : this.nodes) {
+					if (otherNode != node) {
+						dx = node[0] - otherNode[0];
+						dy = node[1] - otherNode[1];
+						d2 = dx ** 2.0 + dy ** 2.0;
+						if (d2 != 0.0) {
+							vel[0] += dx / d2;
+							vel[1] += dy / d2;
+						}
+					}
+				}
+				velFactor = 15.0;
+				node[0] += velFactor * vel[0];
+				node[1] += velFactor * vel[1];
+
+				if (node[0] < 0) {
+					node[0] = 0.0;
+				} else if (node[0] >= X_RES) {
+					node[0] = X_RES - 1.0;
+				}
+				if (node[1] < BAR_HEIGHT) {
+					node[1] = BAR_HEIGHT;
+				} else if (node[1] >= Y_RES) {
+					node[1] = Y_RES - 1.0;
+				}
+			}
+		}
 	}
 
 	function update(inputManager, events) {
@@ -207,58 +254,8 @@ class MainScene : AbstractScene {
 		}
 
 		// Move nodes apart.
-		if (false && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
-			for (node : this.nodes) {
-				vel = [0.0, 0.0];
-				velFactor = 10.0;
-				for (otherNode : this.nodes) {
-					if (otherNode != node) {
-						dx = node[0] - otherNode[0];
-						dy = node[1] - otherNode[1];
-						d2 = dx ** 2.0 + dy ** 2.0;
-						if (d2 != 0.0) {
-							vel[0] += dx / d2;
-							vel[1] += dy / d2;
-						}
-					}
-				}
-				node[0] += velFactor * vel[0];
-				node[1] += velFactor * vel[1];
-
-				if (node[0] < 0) {
-					node[0] = 0.0;
-				} else if (node[0] >= X_RES) {
-					node[0] = X_RES - 1.0;
-				}
-				if (node[1] < 0) {
-					node[1] = 0.0;
-				} else if (node[1] >= Y_RES) {
-					node[1] = Y_RES - 1.0;
-				}
-			}
-		}
-		// Move a random node to the centroid of its neighbors.
-		if (false && inputManager.isKeyPressedThisFrame(KeyboardKey.ENTER)) {
-			x = 0.0;
-			y = 0.0;
-			n = 0;
-			i = Random.randomInt(this.nodes.length);
-			for (edge : this.edges) {
-				if (edge[0] == i) {
-					x += this.nodes[edge[1]][0];
-					y += this.nodes[edge[1]][1];
-					++n;
-				}
-				if (edge[1] == i) {
-					x += this.nodes[edge[0]][0];
-					y += this.nodes[edge[0]][1];
-					++n;
-				}
-			}
-			if (n != 0) {
-				this.nodes[i][0] = x / n;
-				this.nodes[i][1] = y / n;
-			}
+		if (inputManager.isKeyPressed(KeyboardKey.SPACE)) {
+			this.antigravitate(1);
 		}
 
 		// Clicked node follows mouse.
@@ -311,7 +308,7 @@ class MainScene : AbstractScene {
 				case GameMode.TIMED:
 					Graphics2D.Draw.rectangle
 						( 0, 0
-						, X_RES * this.levelTimer / (MAX_TIME_PER_EDGE * this.edges.length), 20
+						, X_RES * this.levelTimer / (MAX_TIME_PER_EDGE * this.edges.length), BAR_HEIGHT
 						, 128, 128, 128
 						);
 					break;
@@ -321,7 +318,7 @@ class MainScene : AbstractScene {
 						end = Math.min(X_RES - 1, (i + 1) * X_RES / this.nodes.length);
 						Graphics2D.Draw.rectangle
 							( start, 1
-							, end - start, 19
+							, end - start, BAR_HEIGHT - 1
 							, 128, 128, 128
 							);
 					}
@@ -337,6 +334,12 @@ class MainScene : AbstractScene {
 			edgeColor = this.intersectMap[i]
 				? [BAD_EDGE_R, BAD_EDGE_G, BAD_EDGE_B]
 				: [GOOD_EDGE_R, GOOD_EDGE_G, GOOD_EDGE_B];
+			Graphics2D.Draw.line
+				( this.nodes[this.edges[i][0]][0], this.nodes[this.edges[i][0]][1]
+				, this.nodes[this.edges[i][1]][0], this.nodes[this.edges[i][1]][1]
+				, EDGE_WIDTH + 2
+				, 0, 0, 0
+				);
 			Graphics2D.Draw.line
 				( this.nodes[this.edges[i][0]][0], this.nodes[this.edges[i][0]][1]
 				, this.nodes[this.edges[i][1]][0], this.nodes[this.edges[i][1]][1]
