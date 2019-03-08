@@ -34,6 +34,8 @@ const FLASH_NODE_B = 255;
 
 const MAX_TIME_PER_EDGE = 100;
 
+enum GameMode { RELAX, TIMED, MOVES }
+
 class MainScene : AbstractScene {
 	field clickedNode;
 	field nodeCount = 8;
@@ -46,8 +48,19 @@ class MainScene : AbstractScene {
 	field levelText;
 	field resetText = this.font.render("Press Esc to return to main menu.");
 
-	field timed;
+	field gameMode;
+
 	field levelTimer;
+
+	field movesLeft;
+
+	field gameOver = false;
+
+	constructor(gameMode) : base() {
+		this.gameMode = gameMode;
+
+		this.reset();
+	}
 
 	// Checks for intersection between line segments.
 	// Adapted from https://stackoverflow.com/a/1968345/3217185.
@@ -139,12 +152,8 @@ class MainScene : AbstractScene {
 		this.levelText = this.font.render(this.nodes.length);
 
 		this.levelTimer = MAX_TIME_PER_EDGE * this.edges.length;
-	}
 
-	constructor(timed) : base() {
-		this.timed = timed;
-
-		this.reset();
+		this.movesLeft = this.nodes.length;
 	}
 
 	function update(inputManager, events) {
@@ -153,7 +162,7 @@ class MainScene : AbstractScene {
 			return;
 		}
 
-		if (this.timed && this.winTimer == 0) {
+		if (this.winTimer == 0) {
 			--this.levelTimer;
 		}
 
@@ -173,9 +182,12 @@ class MainScene : AbstractScene {
 			switch (e.type) {
 				case EventType.MOUSE_RELEASE:
 					// Release clicked node, if any.
-					this.clickedNode = null;
-					if (this.solved && this.winTimer == 0) {
-						this.winTimer = 100;
+					if (this.clickedNode != null) {
+						--this.movesLeft;
+						this.clickedNode = null;
+						if (this.solved && this.winTimer == 0) {
+							this.winTimer = 100;
+						}
 					}
 					break;
 				case EventType.MOUSE_PRESS:
@@ -250,7 +262,7 @@ class MainScene : AbstractScene {
 		}
 
 		// Clicked node follows mouse.
-		if (this.clickedNode != null && (!this.timed || this.levelTimer > 0)) {
+		if (this.clickedNode != null && !this.gameOver) {
 			this.nodes[this.clickedNode][0] = xMouse;
 			this.nodes[this.clickedNode][1] = yMouse;
 		}
@@ -269,23 +281,52 @@ class MainScene : AbstractScene {
 			}
 			this.intersectMap.add(foundIntersection);
 		}
+
+		// Check for game over.
+		switch (this.gameMode) {
+			case GameMode.RELAX:
+				break;
+			case GameMode.TIMED:
+				if (!this.solved && this.levelTimer == 0) {
+					this.gameOver = true;
+				}
+				break;
+			case GameMode.MOVES:
+				if (!this.solved && this.movesLeft == 0) {
+					this.gameOver = true;
+				}
+				break;
+		}
 	}
 
 	function render() {
-		// Draw timer, if timed.
-		if (this.timed) {
-			Graphics2D.Draw.fill(212, 212, 212);
-			if (this.levelTimer > 0) {
-				Graphics2D.Draw.rectangle
-					( 0, 0
-					, X_RES * this.levelTimer / (MAX_TIME_PER_EDGE * this.edges.length), 20
-					, 128, 128, 128
-					);
-			} else {
-				this.resetText.draw(0, 0);
-			}
+		if (this.gameOver) {
+			Graphics2D.Draw.fill(212, 159, 159);
+			this.resetText.draw(0, 0);
 		} else {
 			Graphics2D.Draw.fill(212, 212, 212);
+			switch (this.gameMode) {
+				case GameMode.RELAX:
+					break;
+				case GameMode.TIMED:
+					Graphics2D.Draw.rectangle
+						( 0, 0
+						, X_RES * this.levelTimer / (MAX_TIME_PER_EDGE * this.edges.length), 20
+						, 128, 128, 128
+						);
+					break;
+				case GameMode.MOVES:
+					for (i = 0; i < this.movesLeft; ++i) {
+						start = i * X_RES / this.nodes.length + 1;
+						end = Math.min(X_RES - 1, (i + 1) * X_RES / this.nodes.length);
+						Graphics2D.Draw.rectangle
+							( start, 1
+							, end - start, 19
+							, 128, 128, 128
+							);
+					}
+					break;
+			}
 		}
 
 		// Draw current number of nodes.

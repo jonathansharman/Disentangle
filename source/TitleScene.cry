@@ -9,18 +9,26 @@ class TitleScene : AbstractScene {
 		.setSize(20)
 		.setColor(0, 0, 0);
 	field title;
-	field instructions;
+	field selection = 0;
+	field options;
 
 	constructor() : base() {
 		this.title = this.font.setSize(36).render("Disentangle");
-		this.instructions = this.font.setSize(20).render("Press 1 for relaxation mode, 2 for timed mode.");
+		this.font.setSize(20);
+		this.options =
+			[ this.font.render("1) Relaxation mode")
+			, this.font.render("2) Timed mode")
+			, this.font.render("3) Move-counted mode")
+			];
 	}
 
 	function update(inputManager, events) {
 		if (inputManager.isKeyPressed(KeyboardKey.NUM_1)) {
-			this.switchScene(new MainScene(false));
+			this.switchScene(new MainScene(GameMode.RELAX));
 		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_2)) {
-			this.switchScene(new MainScene(true));
+			this.switchScene(new MainScene(GameMode.TIMED));
+		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_3)) {
+			this.switchScene(new MainScene(GameMode.MOVES));
 		}
 	}
 
@@ -28,11 +36,13 @@ class TitleScene : AbstractScene {
 		Graphics2D.Draw.fill(212, 212, 212);
 		this.title.draw
 			( X_RES / 2 - this.title.width / 2
-			, Y_RES / 3 - this.title.height / 2
+			, Y_RES / 4 - this.title.height / 2
 			);
-		this.instructions.draw
-			( X_RES / 2 - this.instructions.width / 2
-			, 2 * Y_RES / 3 - this.instructions.height / 2
-			);
+		for (i = 0; i < this.options.length; ++i) {
+			this.options[i].draw
+				( X_RES / 2 - this.options[i].width / 2
+				, Y_RES / 2 - this.options[i].height / 2 + 40 * i
+				);
+		}
 	}
 }
