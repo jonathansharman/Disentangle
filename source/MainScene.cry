@@ -63,10 +63,12 @@ class MainScene : AbstractScene {
 
 	field gameOver = false;
 
+	field loaded = false;
+	field loadNextFrame = false;
+	field loadingText = this.font.render("Loading...");
+
 	constructor(gameMode) : base() {
 		this.gameMode = gameMode;
-
-		this.reset();
 	}
 
 	// Checks for intersection between line segments.
@@ -240,6 +242,15 @@ class MainScene : AbstractScene {
 	}
 
 	function update(inputManager, events) {
+		if (this.loadNextFrame) {
+			this.reset();
+			this.loaded = true;
+			this.loadNextFrame = false;
+		} else if (!this.loaded) {
+			this.loadNextFrame = true;
+			return;
+		}
+
 		if (inputManager.isKeyPressed(KeyboardKey.ESCAPE)) {
 			this.switchScene(new TitleScene());
 			return;
@@ -252,6 +263,8 @@ class MainScene : AbstractScene {
 		if (this.winTimer > 0) {
 			if (this.winTimer == 1) {
 				++this.nodeCount;
+				this.loaded = false;
+				this.loadNextFrame = false;
 				this.reset();
 			}
 			--this.winTimer;
@@ -336,6 +349,11 @@ class MainScene : AbstractScene {
 		bgColor = this.gameOver ? [212, 159, 159] : [212, 212, 212];
 
 		Graphics2D.Draw.fill(bgColor[0], bgColor[1], bgColor[2]);
+
+		if (!this.loaded) {
+			this.loadingText.draw(0, 0);
+			return;
+		}
 
 		// Draw edges.
 		for (i = 0; i < this.edges.length; ++i) {
