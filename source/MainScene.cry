@@ -14,29 +14,13 @@ const EDGE_WIDTH = 3.5;
 
 const BAR_HEIGHT = 20;
 
-const BAD_EDGE_R = 170;
-const BAD_EDGE_G = 0;
-const BAD_EDGE_B = 0;
-
-const GOOD_EDGE_R = 0;
-const GOOD_EDGE_G = 80;
-const GOOD_EDGE_B = 160;
-
-const BAD_NODE_R = 212;
-const BAD_NODE_G = 0;
-const BAD_NODE_B = 0;
-
-const GOOD_NODE_R = 0;
-const GOOD_NODE_G = 128;
-const GOOD_NODE_B = 255;
-
-const FLASH_NODE_R = 128;
-const FLASH_NODE_G = 192;
-const FLASH_NODE_B = 255;
-
 const MAX_TIME_PER_EDGE = 100;
+const MAX_MOVES_PER_EDGE = 1;
 
-const DFLT_NODE_COUNT = 8;
+const WIN_TIMER_LENGTH = 75;
+
+const COLOR_SATURATION = 0.6;
+const COLOR_VALUE = 0.9;
 
 // Helps avoid false positives at endpoints.
 const COLLISION_EPSILON = 0.01;
@@ -46,29 +30,78 @@ enum GameMode { RELAX, TIMED, MOVES }
 class MainScene : AbstractScene {
 	field clickedNode;
 	field nodeCount = DFLT_NODE_COUNT;
-	field nodes;
-	field edges;
+	field nodes = [];
+	field edges = [];
 	field solved = false;
 	field intersectMap;
 	field winTimer = 0;
-	field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(20).setColor(0, 0, 0);
-	field levelText;
-	field resetText = this.font.render("Press Esc to return to main menu.");
+	field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(20);
+	field levelText = this.font.setColor(0, 0, 0).render(this.nodeCount);
+	field resetText = this.font.setColor(0, 0, 0).render("Press Esc to return to main menu.");
 
 	field gameMode;
 
+	field maxLevelTime;
 	field levelTimer;
 
+	field maxMoves;
 	field movesLeft;
 
 	field gameOver = false;
 
 	field loaded = false;
 	field loadNextFrame = false;
-	field loadingText = this.font.render("Loading...");
+	field loadingText = this.font.setColor(128, 128, 128).render("Loading...");
+
+	field nodeDrawOrder;
+	field nodeColors;
+	field edgeDrawOrder;
+	field edgeColors;
 
 	constructor(gameMode) : base() {
 		this.gameMode = gameMode;
+	}
+
+	// Computes x mod y, where x and y are nonnegative floating-point numbers.
+	static function fmod(x, y) {
+		while (x > y) {
+			x -= y;
+		}
+		return x;
+	}
+
+	// h in [0.0, 360.0)
+	// s in [0.0, 1.0]
+	// v in [0.0, 1.0]
+	static function hsvToRgb(h, s, v) {
+		c = v * s;
+		x = c * (1.0 - Math.abs(MainScene.fmod(h / 60, 2.0) - 1.0));
+		m = v - c;
+		switch (floor(h) / 60) {
+			case 0:
+				rgbPrime = [c, x, 0];
+				break;
+			case 1:
+				rgbPrime = [x, c, 0];
+				break;
+			case 2:
+				rgbPrime = [0, c, x];
+				break;
+			case 3:
+				rgbPrime = [0, x, c];
+				break;
+			case 4:
+				rgbPrime = [x, 0, c];
+				break;
+			case 5:
+				rgbPrime = [c, 0, x];
+				break;
+		}
+		return
+			[ Math.floor((rgbPrime[0] + m) * 255)
+			, Math.floor((rgbPrime[1] + m) * 255)
+			, Math.floor((rgbPrime[2] + m) * 255)
+			];
 	}
 
 	// Checks for intersection between line segments.
@@ -157,8 +190,8 @@ class MainScene : AbstractScene {
 
 		// Generate all possible edges in random order.
 		allEdges = [];
-		for (i = 0; i < this.nodeCount - 1; ++i) {
-			for (j = i + 1; j < this.nodeCount; ++j) {
+		for (i = 0; i < this.nodes.length - 1; ++i) {
+			for (j = i + 1; j < this.nodes.length; ++j) {
 				allEdges.add([i, j]);
 			}
 		}
@@ -196,11 +229,40 @@ class MainScene : AbstractScene {
 		// Relax nodes using antigravitation.
 		this.antigravitate(300);
 
-		this.levelText = this.font.render(this.nodes.length);
+		this.levelText = this.font.setColor(0, 0, 0).render(this.nodes.length);
 
-		this.levelTimer = MAX_TIME_PER_EDGE * this.edges.length;
+		this.maxLevelTime = MAX_TIME_PER_EDGE * this.edges.length;
+		this.levelTimer = this.maxLevelTime;
 
-		this.movesLeft = this.nodes.length;
+		this.maxMoves = MAX_MOVES_PER_EDGE * this.edges.length;
+		this.movesLeft = this.maxMoves;
+
+		// Set draw orders and colors.
+		this.nodeDrawOrder = [];
+		for (i = 0; i < this.nodes.length; ++i) {
+			this.nodeDrawOrder.add(i);
+		}
+		// Shuffle node draw order (and therefore color assignment) to avoid giving hints.
+		this.nodeDrawOrder.shuffle();
+		this.nodeColors = [];
+		for (i = 0; i < this.nodes.length; ++i) {
+			this.nodeColors.add(MainScene.hsvToRgb
+				( this.nodeDrawOrder[i] * 360.0 / this.nodes.length
+				, COLOR_SATURATION
+				, COLOR_VALUE
+				));
+		}
+		// Edges are already shuffled. Assign draw order and colors in order.
+		this.edgeDrawOrder = [];
+		this.edgeColors = [];
+		for (i = 0; i < this.edges.length; ++i) {
+			this.edgeDrawOrder.add(i);
+			this.edgeColors.add(MainScene.hsvToRgb
+				( i * 360.0 / this.nodes.length
+				, COLOR_SATURATION
+				, COLOR_VALUE
+				));
+		}
 	}
 
 	// Pushes nodes away from each other and away from the edges.
@@ -241,6 +303,35 @@ class MainScene : AbstractScene {
 		}
 	}
 
+	// Moves the node with the given index and its attached edges to the front.
+	function moveToFront(index) {
+		// Bubble up the target node.
+		for (i = 0; i < this.nodeDrawOrder.length - 1; ++i) {
+			if (this.nodeDrawOrder[i] == index) {
+				t = this.nodeDrawOrder[i + 1];
+				this.nodeDrawOrder[i] = t;
+				this.nodeDrawOrder[i + 1] = index;
+			}
+		}
+		// Stably partition the edges, with attached edges in front.
+		edgeDrawOrderPartition = [[], []];
+		edgeColorsPartition = [[], []];
+		for (i = 0; i < this.edgeDrawOrder.length; ++i) {
+			edge = this.edges[this.edgeDrawOrder[i]];
+			if (edge[0] == index || edge[1] == index) {
+				edgeDrawOrderPartition[1].add(this.edgeDrawOrder[i]);
+				edgeColorsPartition[1].add(this.edgeColors[i]);
+			} else {
+				edgeDrawOrderPartition[0].add(this.edgeDrawOrder[i]);
+				edgeColorsPartition[0].add(this.edgeColors[i]);
+			}
+		}
+		this.edgeDrawOrder = edgeDrawOrderPartition[0];
+		this.edgeDrawOrder.concat(edgeDrawOrderPartition[1]);
+		this.edgeColors = edgeColorsPartition[0];
+		this.edgeColors.concat(edgeColorsPartition[1]);
+	}
+
 	function update(inputManager, events) {
 		if (this.loadNextFrame) {
 			this.reset();
@@ -265,9 +356,9 @@ class MainScene : AbstractScene {
 				++this.nodeCount;
 				this.loaded = false;
 				this.loadNextFrame = false;
-				this.reset();
 			}
 			--this.winTimer;
+			return;
 		}
 
 		mousePos = inputManager.getMousePosition();
@@ -282,19 +373,23 @@ class MainScene : AbstractScene {
 						--this.movesLeft;
 						this.clickedNode = null;
 						if (this.solved && this.winTimer == 0) {
-							this.winTimer = 100;
+							this.winTimer = WIN_TIMER_LENGTH;
 						}
 					}
 					break;
 				case EventType.MOUSE_PRESS:
 					// Find clicked node, if any.
 					minDistance = 2 * NODE_RADIUS;
-					for (i = 0; i < this.nodeCount; ++i) {
+					for (i = 0; i < this.nodes.length; ++i) {
 						distance = ((this.nodes[i][0] - xMouse) ** 2 + (this.nodes[i][1] - yMouse) ** 2) ** 0.5;
 						if (distance <= NODE_RADIUS && (distance < minDistance)) {
 							this.clickedNode = i;
 							minDistance = distance;
 						}
+					}
+					if (this.clickedNode != null) {
+						// Move clicked node and attached edges to the front.
+						this.moveToFront(this.clickedNode);
 					}
 					break;
 				default:
@@ -303,7 +398,7 @@ class MainScene : AbstractScene {
 		}
 
 		// Allow free manual antigravitation if game is not over.
-		if (!this.gameOver && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
+		if (!this.gameOver && this.winTimer == 0 && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
 			this.antigravitate(1);
 		}
 
@@ -351,58 +446,63 @@ class MainScene : AbstractScene {
 		Graphics2D.Draw.fill(bgColor[0], bgColor[1], bgColor[2]);
 
 		if (!this.loaded) {
-			this.loadingText.draw(0, 0);
-			return;
-		}
-
-		// Draw edges.
-		for (i = 0; i < this.edges.length; ++i) {
-			// Draw edge outline.
-			Graphics2D.Draw.line
-				( this.nodes[this.edges[i][0]][0], this.nodes[this.edges[i][0]][1]
-				, this.nodes[this.edges[i][1]][0], this.nodes[this.edges[i][1]][1]
-				, EDGE_WIDTH + 2
-				, 0, 0, 0
+			this.loadingText.draw
+				( X_RES / 2 - this.loadingText.width / 2
+				, Y_RES / 2 - this.loadingText.height / 2
 				);
-			// Draw edge fill color.
-			edgeColor = this.intersectMap[i]
-				? [BAD_EDGE_R, BAD_EDGE_G, BAD_EDGE_B]
-				: [GOOD_EDGE_R, GOOD_EDGE_G, GOOD_EDGE_B];
-			Graphics2D.Draw.line
-				( this.nodes[this.edges[i][0]][0], this.nodes[this.edges[i][0]][1]
-				, this.nodes[this.edges[i][1]][0], this.nodes[this.edges[i][1]][1]
-				, EDGE_WIDTH
-				, edgeColor[0], edgeColor[1], edgeColor[2]
-				);
-		}
-
-		// Draw nodes.
-		for (i = 0; i < this.nodeCount; ++i) {
-			if (this.solved) {
-				nodeColor = (this.winTimer / 10) % 2 == 0
-					? [GOOD_NODE_R, GOOD_NODE_G, GOOD_NODE_B]
-					: [FLASH_NODE_R, FLASH_NODE_G, FLASH_NODE_B];
-			} else {
-				badNode = false;
-				for (j = 0; j < this.edges.length; ++j) {
-					if (this.edges[j][0] == i || this.edges[j][1] == i) {
-						badNode = badNode || this.intersectMap[j];
-					}
-				}
-				nodeColor = badNode
-					? [BAD_NODE_R, BAD_NODE_G, BAD_NODE_B]
-					: [GOOD_NODE_R, GOOD_NODE_G, GOOD_NODE_B];
+		} else {
+			// Draw edges.
+			for (i = 0; i < this.edgeDrawOrder.length; ++i) {
+				j = this.edgeDrawOrder[i];
+				alpha = this.solved && this.winTimer > 0
+					? 64 * this.winTimer / WIN_TIMER_LENGTH
+					: this.intersectMap[j] ? 255 : 64;
+				// Draw edge outline.
+				Graphics2D.Draw.line
+					( this.nodes[this.edges[j][0]][0], this.nodes[this.edges[j][0]][1]
+					, this.nodes[this.edges[j][1]][0], this.nodes[this.edges[j][1]][1]
+					, EDGE_WIDTH + 2
+					, 0, 0, 0, alpha
+					);
+				// Draw edge fill.
+				edgeColor = this.edgeColors[i];
+				Graphics2D.Draw.line
+					( this.nodes[this.edges[j][0]][0], this.nodes[this.edges[j][0]][1]
+					, this.nodes[this.edges[j][1]][0], this.nodes[this.edges[j][1]][1]
+					, EDGE_WIDTH
+					, edgeColor[0], edgeColor[1], edgeColor[2], alpha
+					);
 			}
-			Graphics2D.Draw.ellipse
-				( this.nodes[i][0] - NODE_RADIUS, this.nodes[i][1] - NODE_RADIUS
-				, 2 * NODE_RADIUS, 2 * NODE_RADIUS
-				, 0, 0, 0
-				);
-			Graphics2D.Draw.ellipse
-				( this.nodes[i][0] - NODE_RADIUS + NODE_BORDER, this.nodes[i][1] - NODE_RADIUS + NODE_BORDER
-				, 2 * NODE_RADIUS - 2 * NODE_BORDER, 2 * NODE_RADIUS - 2 * NODE_BORDER
-				, nodeColor[0], nodeColor[1], nodeColor[2]
-				);
+
+			// Draw nodes.
+			for (i = 0; i < this.nodeDrawOrder.length; ++i) {
+				j = this.nodeDrawOrder[i];
+				nodeColor = MainScene.hsvToRgb(j * 360.0 / this.nodes.length, COLOR_SATURATION, COLOR_VALUE);
+				nodeColor = this.nodeColors[j];
+				if (this.solved && this.winTimer > 0) {
+					alpha = 64 * this.winTimer / WIN_TIMER_LENGTH;
+				} else {
+					badNode = false;
+					for (k = 0; k < this.edges.length; ++k) {
+						if (this.edges[k][0] == j || this.edges[k][1] == j) {
+							badNode = badNode || this.intersectMap[k];
+						}
+					}
+					alpha = badNode ? 255 : 64;
+				}
+				// Draw node outline.
+				Graphics2D.Draw.ellipse
+					( this.nodes[j][0] - NODE_RADIUS, this.nodes[j][1] - NODE_RADIUS
+					, 2 * NODE_RADIUS, 2 * NODE_RADIUS
+					, 0, 0, 0, alpha
+					);
+				// Draw node fill.
+				Graphics2D.Draw.ellipse
+					( this.nodes[j][0] - NODE_RADIUS + NODE_BORDER, this.nodes[j][1] - NODE_RADIUS + NODE_BORDER
+					, 2 * NODE_RADIUS - 2 * NODE_BORDER, 2 * NODE_RADIUS - 2 * NODE_BORDER
+					, nodeColor[0], nodeColor[1], nodeColor[2], alpha
+					);
+			}
 		}
 
 		// Draw overlays.
@@ -420,22 +520,26 @@ class MainScene : AbstractScene {
 					break;
 				case GameMode.TIMED:
 					// Draw timer.
-					Graphics2D.Draw.rectangle
-						( 0, 0
-						, X_RES * this.levelTimer / (MAX_TIME_PER_EDGE * this.edges.length), BAR_HEIGHT
-						, 0, 0, 0, 128
-						);
+					if (this.levelTimer != null) {
+						Graphics2D.Draw.rectangle
+							( 0, 0
+							, X_RES * this.levelTimer / this.maxLevelTime, BAR_HEIGHT
+							, 0, 0, 0, 64
+							);
+					}
 					break;
 				case GameMode.MOVES:
 					// Draw move counter.
-					for (i = 0; i < this.movesLeft; ++i) {
-						start = i * X_RES / this.nodes.length + 1;
-						end = Math.min(X_RES - 1, (i + 1) * X_RES / this.nodes.length);
-						Graphics2D.Draw.rectangle
-							( start, 1
-							, end - start, BAR_HEIGHT - 1
-							, 0, 0, 0, 128
-							);
+					if (this.movesLeft != null) {
+						for (i = 0; i < this.movesLeft; ++i) {
+							start = i * X_RES / this.maxMoves + 1;
+							end = Math.min(X_RES - 1, (i + 1) * X_RES / this.maxMoves);
+							Graphics2D.Draw.rectangle
+								( start, 1
+								, end - start, BAR_HEIGHT - 1
+								, 0, 0, 0, 64
+								);
+						}
 					}
 					break;
 			}
