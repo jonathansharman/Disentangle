@@ -2,6 +2,8 @@ import Graphics2D;
 import Graphics2DText;
 import TwoCansAlpha2;
 
+const DFLT_NODE_COUNT = 8;
+
 class TitleScene : AbstractScene {
 	field font = FontResource
 		.fromSystem("Times New Roman")
@@ -30,6 +32,27 @@ class TitleScene : AbstractScene {
 		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_3)) {
 			this.switchScene(new MainScene(GameMode.MOVES));
 		}
+
+		if (inputManager.isKeyPressedThisFrame(KeyboardKey.UP)) {
+			this.selection = (this.selection - 1) % this.options.length;
+		}
+		if (inputManager.isKeyPressedThisFrame(KeyboardKey.DOWN)) {
+			this.selection = (this.selection + 1) % this.options.length;
+		}
+
+		if (inputManager.isKeyPressed(KeyboardKey.SPACE) || inputManager.isKeyPressed(KeyboardKey.ENTER)) {
+			switch (this.selection) {
+				case 0:
+					this.switchScene(new MainScene(GameMode.RELAX));
+					return;
+				case 1:
+					this.switchScene(new MainScene(GameMode.TIMED));
+					return;
+				case 2:
+					this.switchScene(new MainScene(GameMode.MOVES));
+					return;
+			}
+		}
 	}
 
 	function render() {
@@ -39,6 +62,15 @@ class TitleScene : AbstractScene {
 			, Y_RES / 4 - this.title.height / 2
 			);
 		for (i = 0; i < this.options.length; ++i) {
+			if (i == this.selection) {
+				Graphics2D.Draw.rectangle
+					( X_RES / 2 - this.options[i].width / 2
+					, Y_RES / 2 - this.options[i].height / 2 + 40 * i
+					, this.options[i].width
+					, this.options[i].height
+					, 160, 160, 160
+					);
+			}
 			this.options[i].draw
 				( X_RES / 2 - this.options[i].width / 2
 				, Y_RES / 2 - this.options[i].height / 2 + 40 * i
