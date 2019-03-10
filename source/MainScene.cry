@@ -367,36 +367,38 @@ class MainScene : AbstractScene {
 		xMouse = 1.0 * mousePos[0];
 		yMouse = 1.0 * mousePos[1];
 
-		for (e : events) {
-			switch (e.type) {
-				case EventType.MOUSE_RELEASE:
-					// Release clicked node, if any.
-					if (this.clickedNode != null) {
-						--this.movesLeft;
-						this.clickedNode = null;
-						if (this.solved && this.winTimer == 0) {
-							this.winTimer = WIN_TIMER_LENGTH;
+		if (!this.gameOver) {
+			for (e : events) {
+				switch (e.type) {
+					case EventType.MOUSE_RELEASE:
+						// Release clicked node, if any.
+						if (this.clickedNode != null) {
+							--this.movesLeft;
+							this.clickedNode = null;
+							if (this.solved && this.winTimer == 0) {
+								this.winTimer = WIN_TIMER_LENGTH;
+							}
 						}
-					}
-					break;
-				case EventType.MOUSE_PRESS:
-					// Find clicked node, if any.
-					minDistance = 2 * NODE_RADIUS;
-					for (i = 0; i < this.nodes.length; ++i) {
-						distance = ((this.nodes[i][0] - xMouse) ** 2 + (this.nodes[i][1] - yMouse) ** 2) ** 0.5;
-						if (distance <= NODE_RADIUS && (distance < minDistance)) {
-							this.clickedNode = i;
-							minDistance = distance;
+						break;
+					case EventType.MOUSE_PRESS:
+						// Find clicked node, if any.
+						minDistance = 2 * NODE_RADIUS;
+						for (i = 0; i < this.nodes.length; ++i) {
+							distance = ((this.nodes[i][0] - xMouse) ** 2 + (this.nodes[i][1] - yMouse) ** 2) ** 0.5;
+							if (distance <= NODE_RADIUS && (distance < minDistance)) {
+								this.clickedNode = i;
+								minDistance = distance;
+							}
 						}
-					}
-					if (this.clickedNode != null) {
-						// Move clicked node and attached edges to the front.
-						this.moveToFront(this.clickedNode);
-					}
-					break;
-				default:
-					break;
-			}
+						if (this.clickedNode != null) {
+							// Move clicked node and attached edges to the front.
+							this.moveToFront(this.clickedNode);
+						}
+						break;
+					default:
+						break;
+				}
+			}	
 		}
 
 		// Allow free manual antigravitation if game is not over.
