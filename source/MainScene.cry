@@ -29,14 +29,14 @@ enum GameMode { RELAX, TIMED, MOVES }
 
 class MainScene : AbstractScene {
 	field clickedNode;
-	field nodeCount = DFLT_NODE_COUNT;
+	field nodeCount;
 	field nodes = [];
 	field edges = [];
 	field solved = false;
 	field intersectMap;
 	field winTimer = 0;
 	field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(20);
-	field levelText = this.font.setColor(0, 0, 0).render(this.nodeCount);
+	field levelText;
 	field resetText = this.font.setColor(0, 0, 0).render("Press Esc to return to main menu.");
 
 	field gameMode;
@@ -58,8 +58,10 @@ class MainScene : AbstractScene {
 	field edgeDrawOrder;
 	field edgeColors;
 
-	constructor(gameMode) : base() {
+	constructor(gameMode, nodeCount) : base() {
 		this.gameMode = gameMode;
+		this.nodeCount = nodeCount;
+		this.levelText = this.font.setColor(0, 0, 0).render(this.nodeCount);
 	}
 
 	// Computes x mod y, where x and y are nonnegative floating-point numbers.

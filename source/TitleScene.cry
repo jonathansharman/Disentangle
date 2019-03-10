@@ -2,16 +2,18 @@ import Graphics2D;
 import Graphics2DText;
 import TwoCansAlpha2;
 
-const DFLT_NODE_COUNT = 8;
+const MIN_NODE_COUNT = 8;
 
 class TitleScene : AbstractScene {
+	static field nodeCount = MIN_NODE_COUNT;
+	static field selection = 0;
+
 	field font = FontResource
 		.fromSystem("Times New Roman")
 		.getRenderer()
 		.setSize(20)
 		.setColor(0, 0, 0);
 	field title;
-	field selection = 0;
 	field options;
 
 	constructor() : base() {
@@ -26,30 +28,36 @@ class TitleScene : AbstractScene {
 
 	function update(inputManager, events) {
 		if (inputManager.isKeyPressed(KeyboardKey.NUM_1)) {
-			this.switchScene(new MainScene(GameMode.RELAX));
+			this.switchScene(new MainScene(GameMode.RELAX, TitleScene.nodeCount));
 		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_2)) {
-			this.switchScene(new MainScene(GameMode.TIMED));
+			this.switchScene(new MainScene(GameMode.TIMED, TitleScene.nodeCount));
 		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_3)) {
-			this.switchScene(new MainScene(GameMode.MOVES));
+			this.switchScene(new MainScene(GameMode.MOVES, TitleScene.nodeCount));
 		}
 
 		if (inputManager.isKeyPressedThisFrame(KeyboardKey.UP)) {
-			this.selection = (this.selection - 1) % this.options.length;
+			TitleScene.selection = (TitleScene.selection - 1) % this.options.length;
 		}
 		if (inputManager.isKeyPressedThisFrame(KeyboardKey.DOWN)) {
-			this.selection = (this.selection + 1) % this.options.length;
+			TitleScene.selection = (TitleScene.selection + 1) % this.options.length;
+		}
+		if (inputManager.isKeyPressedThisFrame(KeyboardKey.LEFT) && TitleScene.nodeCount > MIN_NODE_COUNT) {
+			--TitleScene.nodeCount;
+		}
+		if (inputManager.isKeyPressedThisFrame(KeyboardKey.RIGHT)) {
+			++TitleScene.nodeCount;
 		}
 
 		if (inputManager.isKeyPressed(KeyboardKey.SPACE) || inputManager.isKeyPressed(KeyboardKey.ENTER)) {
-			switch (this.selection) {
+			switch (TitleScene.selection) {
 				case 0:
-					this.switchScene(new MainScene(GameMode.RELAX));
+					this.switchScene(new MainScene(GameMode.RELAX, TitleScene.nodeCount));
 					return;
 				case 1:
-					this.switchScene(new MainScene(GameMode.TIMED));
+					this.switchScene(new MainScene(GameMode.TIMED, TitleScene.nodeCount));
 					return;
 				case 2:
-					this.switchScene(new MainScene(GameMode.MOVES));
+					this.switchScene(new MainScene(GameMode.MOVES, TitleScene.nodeCount));
 					return;
 			}
 		}
@@ -62,7 +70,7 @@ class TitleScene : AbstractScene {
 			, Y_RES / 4 - this.title.height / 2
 			);
 		for (i = 0; i < this.options.length; ++i) {
-			if (i == this.selection) {
+			if (i == TitleScene.selection) {
 				Graphics2D.Draw.rectangle
 					( X_RES / 2 - this.options[i].width / 2
 					, Y_RES / 2 - this.options[i].height / 2 + 40 * i
@@ -76,5 +84,11 @@ class TitleScene : AbstractScene {
 				, Y_RES / 2 - this.options[i].height / 2 + 40 * i
 				);
 		}
+
+		nodeCountText = this.font.render("< " + TitleScene.nodeCount + " >");
+		nodeCountText.draw
+			( X_RES / 2 - nodeCountText.width / 2
+			, 4 * Y_RES / 5 - nodeCountText.height / 2
+			);
 	}
 }
