@@ -22,9 +22,6 @@ const WIN_TIMER_LENGTH = 75;
 const COLOR_SATURATION = 0.6;
 const COLOR_VALUE = 0.9;
 
-// Helps avoid false positives at endpoints.
-const COLLISION_EPSILON = 0.01;
-
 enum GameMode { RELAX, TIMED, MOVES }
 
 class MainScene : AbstractScene {
@@ -109,6 +106,12 @@ class MainScene : AbstractScene {
 	// Checks for intersection between line segments.
 	// Adapted from https://stackoverflow.com/a/1968345/3217185.
 	function intersect(edge0, edge1) {
+		// Edges that share a node do not intersect.
+		if (edge0[0] == edge1[0] || edge0[0] == edge1[1] || edge0[1] == edge1[0] || edge0[1] == edge1[1]) {
+			return false;
+		}
+
+		// Put left points first.
 		if (this.nodes[edge0[0]][0] <= this.nodes[edge0[1]][0]) {
 			p0_x = this.nodes[edge0[0]][0];
 			p0_y = this.nodes[edge0[0]][1];
@@ -166,8 +169,7 @@ class MainScene : AbstractScene {
 		s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / denominator;
 		t = ( s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / denominator;
 
-		return s >= COLLISION_EPSILON && s <= (1.0 - COLLISION_EPSILON)
-			&& t >= COLLISION_EPSILON && t <= (1 - COLLISION_EPSILON);
+		return s >= 0.0 && s <= 1.0 && t >= 0.0 && t <= 1.0;
 	}
 
 	// Randomize node positions.
