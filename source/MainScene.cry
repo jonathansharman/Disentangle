@@ -180,6 +180,34 @@ class MainScene : AbstractScene {
 		}
 	}
 
+	// Connects all the nodes from start to start + distance (modularly) until no more straight-line connections can be made without intersection.
+	function planarConnect(start, distance, depth = 0) {
+		end = (start + distance) % this.nodes.length;
+		if (distance <= 2) {
+			for (i = 0; i < distance; ++i) {
+				this.edges.add([start + i, (start + i + 1) % this.nodes.length]);
+			}
+			return;
+		}
+		if (Random.randomInt(0, 2) == 0) {
+			// Draw from start.
+			i = Random.randomInt(start + 2, start + distance);
+			this.edges.add([start, i]);
+			if (start != end) {
+				this.edges.add([i, end]);
+			}
+		} else {
+			// Draw to end.
+			i = Random.randomInt(start + 1, start + distance - 1);
+			this.edges.add([i, end]);
+			if (start != end) {
+				this.edges.add([start, i]);
+			}
+		}
+		this.planarConnect(start, i - start, depth + 1);
+		this.planarConnect(i, start + distance - i, depth + 1);
+	}
+
 	// Reset the game.
 	function reset() {
 		this.clickedNode = null;
@@ -190,31 +218,11 @@ class MainScene : AbstractScene {
 			theta = i * 2 * Math.PI / this.nodeCount;
 			offset = Math.min(X_RES, Y_RES) / 2 - 20;
 			this.nodes.add([X_RES / 2 + offset * Math.cos(theta), Y_RES / 2 + offset * Math.sin(theta)]);
+			//this.edges.add([i, (i + 1) % this.nodeCount]);
 		}
 
-		// Generate all possible edges in random order.
-		allEdges = [];
-		for (i = 0; i < this.nodes.length - 1; ++i) {
-			for (j = i + 1; j < this.nodes.length; ++j) {
-				allEdges.add([i, j]);
-			}
-		}
-		allEdges.shuffle();
-
-		// Add random non-intersecting edges to the edge list.
-		this.edges = [];
-		for (candidateEdge : allEdges) {
-			foundIntersection = false;
-			for (existingEdge : this.edges) {
-				if (this.intersect(candidateEdge, existingEdge)) {
-					foundIntersection = true;
-					break;
-				}
-			}
-			if (!foundIntersection) {
-				this.edges.add(candidateEdge);
-			}
-		}
+		// Recursively connect all remaining nodes while retaining planarity.
+		this.planarConnect(0, this.nodes.length);
 
 		// Randomize node positions until there's an intersection.
 		foundIntersection = false;

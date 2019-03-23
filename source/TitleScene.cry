@@ -2,10 +2,11 @@ import Graphics2D;
 import Graphics2DText;
 import TwoCansAlpha2;
 
-const MIN_NODE_COUNT = 8;
+const MIN_NODE_COUNT = 4;
+const DFLT_NODE_COUNT = 8;
 
 class TitleScene : AbstractScene {
-	static field nodeCount = MIN_NODE_COUNT;
+	static field nodeCount = DFLT_NODE_COUNT;
 	static field selection = 0;
 
 	field font = FontResource
