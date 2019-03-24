@@ -266,7 +266,7 @@ class MainScene : AbstractScene {
 		}
 		// Shuffle initial edge draw order, which also determines color.
 		this.edgeDrawOrder = [];
-		for (i = 0; i < this.nodes.length; ++i) {
+		for (i = 0; i < this.edges.length; ++i) {
 			this.edgeDrawOrder.add(i);
 		}
 		this.edgeDrawOrder.shuffle();
