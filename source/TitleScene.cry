@@ -1,9 +1,13 @@
 import Graphics2D;
 import Graphics2DText;
+import Math;
 import TwoCansAlpha2;
 
 const MIN_NODE_COUNT = 4;
 const DFLT_NODE_COUNT = 8;
+
+const MIN_REPEAT_DELAY = 2;
+const MAX_REPEAT_DELAY = 20;
 
 class TitleScene : AbstractScene {
 	static field nodeCount = DFLT_NODE_COUNT;
@@ -17,6 +21,12 @@ class TitleScene : AbstractScene {
 	field title;
 	field options;
 
+	field framesHoldingLeft= 0;
+	field framesHoldingRight = 0;
+	field repeatDelay = MAX_REPEAT_DELAY;
+	field repeatCounter = MAX_REPEAT_DELAY;
+	field pressDirection = 0;
+
 	constructor() : base() {
 		this.title = this.font.setSize(36).render("Disentangle");
 		this.font.setSize(20);
@@ -28,6 +38,7 @@ class TitleScene : AbstractScene {
 	}
 
 	function update(inputManager, events) {
+		// Choose mode with arrow keys / numbers.
 		if (inputManager.isKeyPressed(KeyboardKey.NUM_1)) {
 			this.switchScene(new MainScene(GameMode.RELAX, TitleScene.nodeCount));
 		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_2)) {
@@ -35,20 +46,48 @@ class TitleScene : AbstractScene {
 		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_3)) {
 			this.switchScene(new MainScene(GameMode.MOVES, TitleScene.nodeCount));
 		}
-
 		if (inputManager.isKeyPressedThisFrame(KeyboardKey.UP)) {
 			TitleScene.selection = (TitleScene.selection - 1) % this.options.length;
 		}
 		if (inputManager.isKeyPressedThisFrame(KeyboardKey.DOWN)) {
 			TitleScene.selection = (TitleScene.selection + 1) % this.options.length;
 		}
-		if (inputManager.isKeyPressedThisFrame(KeyboardKey.LEFT) && TitleScene.nodeCount > MIN_NODE_COUNT) {
-			--TitleScene.nodeCount;
+
+		// Set starting nodes.
+		if (inputManager.isKeyPressed(KeyboardKey.LEFT)) {
+			if (!inputManager.isKeyPressed(KeyboardKey.RIGHT)) {
+				if (this.pressDirection != -1) {
+					this.pressDirection = -1;
+					if (TitleScene.nodeCount > MIN_NODE_COUNT) {
+						--TitleScene.nodeCount;
+					}
+				}
+			} else {
+				this.pressDirection = 0;
+			}
+		} else {
+			if (inputManager.isKeyPressed(KeyboardKey.RIGHT)) {
+				if (this.pressDirection != 1) {
+					this.pressDirection = 1;
+					++TitleScene.nodeCount;
+				}
+			} else {
+				this.pressDirection = 0;
+			}
 		}
-		if (inputManager.isKeyPressedThisFrame(KeyboardKey.RIGHT)) {
-			++TitleScene.nodeCount;
+		if (this.pressDirection != 0) {
+			--this.repeatCounter;
+			if (this.repeatCounter == 0) {
+				TitleScene.nodeCount = Math.max(MIN_NODE_COUNT, TitleScene.nodeCount + this.pressDirection);
+				this.repeatDelay = Math.max(1, this.repeatDelay - 3);
+				this.repeatCounter = this.repeatDelay;
+			}
+		} else {
+			this.repeatDelay = MAX_REPEAT_DELAY;
+			this.repeatCounter = MAX_REPEAT_DELAY;
 		}
 
+		// Begin game.
 		if (inputManager.isKeyPressed(KeyboardKey.SPACE) || inputManager.isKeyPressed(KeyboardKey.ENTER)) {
 			switch (TitleScene.selection) {
 				case 0:

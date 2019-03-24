@@ -264,13 +264,16 @@ class MainScene : AbstractScene {
 				, COLOR_VALUE
 				));
 		}
-		// Edges are already shuffled. Assign draw order and colors in order.
+		// Shuffle initial edge draw order, which also determines color.
 		this.edgeDrawOrder = [];
+		for (i = 0; i < this.nodes.length; ++i) {
+			this.edgeDrawOrder.add(i);
+		}
+		this.edgeDrawOrder.shuffle();
 		this.edgeColors = [];
 		for (i = 0; i < this.edges.length; ++i) {
-			this.edgeDrawOrder.add(i);
 			this.edgeColors.add(MainScene.hsvToRgb
-				( i * 360.0 / this.nodes.length
+				( this.edgeDrawOrder[i] * 360.0 / this.edges.length
 				, COLOR_SATURATION
 				, COLOR_VALUE
 				));
