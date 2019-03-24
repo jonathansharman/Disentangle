@@ -40,7 +40,7 @@ class TitleScene : AbstractScene {
 	function update(inputManager, events) {
 		// Choose mode with arrow keys / numbers.
 		if (inputManager.isKeyPressed(KeyboardKey.NUM_1)) {
-			this.switchScene(new MainScene(GameMode.RELAX, TitleScene.nodeCount));
+			this.switchScene(new MainScene(GameMode.CASUAL, TitleScene.nodeCount));
 		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_2)) {
 			this.switchScene(new MainScene(GameMode.TIMED, TitleScene.nodeCount));
 		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_3)) {
@@ -91,7 +91,7 @@ class TitleScene : AbstractScene {
 		if (inputManager.isKeyPressed(KeyboardKey.SPACE) || inputManager.isKeyPressed(KeyboardKey.ENTER)) {
 			switch (TitleScene.selection) {
 				case 0:
-					this.switchScene(new MainScene(GameMode.RELAX, TitleScene.nodeCount));
+					this.switchScene(new MainScene(GameMode.CASUAL, TitleScene.nodeCount));
 					return;
 				case 1:
 					this.switchScene(new MainScene(GameMode.TIMED, TitleScene.nodeCount));

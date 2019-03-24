@@ -442,7 +442,7 @@ class MainScene : AbstractScene {
 
 		// Check for game over.
 		switch (this.gameMode) {
-			case GameMode.RELAX:
+			case GameMode.CASUAL:
 				break;
 			case GameMode.TIMED:
 				if (!this.solved && this.levelTimer == 0) {
