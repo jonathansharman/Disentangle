@@ -25,6 +25,16 @@ const COLOR_VALUE = 0.9;
 enum GameMode { CASUAL, TIMED, MOVES }
 
 class MainScene : AbstractScene {
+	field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(20);
+	field levelText;
+	field resetText = this.font.setColor(0, 0, 0).render("Press Esc to return to main menu.");
+
+	field loaded = false;
+	field loadNextFrame = false;
+	field loadingText = this.font.setColor(128, 128, 128).render("Loading...");
+
+	field gameMode;
+
 	field clickedNode;
 	field nodeCount;
 	field nodes = [];
@@ -32,11 +42,6 @@ class MainScene : AbstractScene {
 	field solved = false;
 	field intersectMap;
 	field winTimer = 0;
-	field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(20);
-	field levelText;
-	field resetText = this.font.setColor(0, 0, 0).render("Press Esc to return to main menu.");
-
-	field gameMode;
 
 	field maxLevelTime;
 	field levelTimer;
@@ -46,14 +51,15 @@ class MainScene : AbstractScene {
 
 	field gameOver = false;
 
-	field loaded = false;
-	field loadNextFrame = false;
-	field loadingText = this.font.setColor(128, 128, 128).render("Loading...");
-
 	field nodeDrawOrder;
 	field nodeColors;
 	field edgeDrawOrder;
 	field edgeColors;
+
+	field selection = [];
+	field selecting = false;
+	field selectionStart;
+	field selectionEnd;
 
 	constructor(gameMode, nodeCount) : base() {
 		this.gameMode = gameMode;
@@ -218,10 +224,10 @@ class MainScene : AbstractScene {
 			theta = i * 2 * Math.PI / this.nodeCount;
 			offset = Math.min(X_RES, Y_RES) / 2 - 20;
 			this.nodes.add([X_RES / 2 + offset * Math.cos(theta), Y_RES / 2 + offset * Math.sin(theta)]);
-			//this.edges.add([i, (i + 1) % this.nodeCount]);
 		}
 
 		// Recursively connect all remaining nodes while retaining planarity.
+		this.edges = [];
 		this.planarConnect(0, this.nodes.length);
 
 		// Randomize node positions until there's an intersection.
@@ -560,6 +566,16 @@ class MainScene : AbstractScene {
 					}
 					break;
 			}
+		}
+
+		// Draw selection box.
+		if (this.selecting) {
+			x = this.selectionStart[0];
+			y = this.selectionStart[1];
+			width = this.selectionEnd[0] - this.selectionStart[0];
+			height = this.selectionEnd[1] - this.selectionStart[1];
+			Graphics2D.Draw.rectangle(x, y, width, height, 0, 0, 0);
+			Graphics2D.Draw.rectangle(x + 1, y + 1, width - 2, height - 2, 255, 255, 255, 128);
 		}
 
 		// Draw current number of nodes.
