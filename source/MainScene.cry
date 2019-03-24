@@ -22,7 +22,7 @@ const WIN_TIMER_LENGTH = 75;
 const COLOR_SATURATION = 0.6;
 const COLOR_VALUE = 0.9;
 
-enum GameMode { RELAX, TIMED, MOVES }
+enum GameMode { CASUAL, TIMED, MOVES }
 
 class MainScene : AbstractScene {
 	field clickedNode;
@@ -238,8 +238,8 @@ class MainScene : AbstractScene {
 			}
 		} while (!foundIntersection);
 
-		// Relax nodes using antigravitation.
-		this.antigravitate(300);
+		// Relax nodes to generate a good-looking initial layout.
+		this.relax(300);
 
 		this.levelText = this.font.setColor(0, 0, 0).render(this.nodes.length);
 
@@ -281,7 +281,7 @@ class MainScene : AbstractScene {
 	}
 
 	// Pushes nodes away from each other and away from the edges.
-	function antigravitate(iterations) {
+	function relax(iterations) {
 		for (i = 0; i < iterations; ++i) {
 			for (node : this.nodes) {
 				wallForceFactor = 0.0005;
@@ -416,7 +416,7 @@ class MainScene : AbstractScene {
 
 		// Allow free manual antigravitation if game is not over.
 		if (!this.gameOver && this.winTimer == 0 && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
-			this.antigravitate(1);
+			this.relax(1);
 		}
 
 		// Clicked node follows mouse.
@@ -532,7 +532,7 @@ class MainScene : AbstractScene {
 			this.resetText.draw(0, 0);
 		} else {
 			switch (this.gameMode) {
-				case GameMode.RELAX:
+				case GameMode.CASUAL:
 					// Nothing special to draw in this mode.
 					break;
 				case GameMode.TIMED:

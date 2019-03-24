@@ -31,7 +31,7 @@ class TitleScene : AbstractScene {
 		this.title = this.font.setSize(36).render("Disentangle");
 		this.font.setSize(20);
 		this.options =
-			[ this.font.render("1) Relaxation mode")
+			[ this.font.render("1) Casual mode")
 			, this.font.render("2) Timed mode")
 			, this.font.render("3) Move-counted mode")
 			];
