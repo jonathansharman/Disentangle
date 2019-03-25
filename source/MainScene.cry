@@ -47,6 +47,10 @@ class MainScene : AbstractScene {
 	field intersectMap;
 	field winTimer = 0;
 
+	// Mouse position
+	field xMouse;
+	field yMouse;
+
 	// Timed mode
 	field maxLevelTime;
 	field levelTimer;
@@ -372,6 +376,20 @@ class MainScene : AbstractScene {
 		this.bgColor = [212, 159, 159];
 	}
 
+	// Returns the closest node to the mouse of those the mouse is over or null if the mouse isn't over any nodes.
+	function getHoveredNode() {
+		hoveredNode = null;
+		minDistance = 2 * NODE_RADIUS;
+		for (i = 0; i < this.nodes.length; ++i) {
+			distance = ((this.nodes[i][0] - this.xMouse) ** 2 + (this.nodes[i][1] - this.yMouse) ** 2) ** 0.5;
+			if (distance <= NODE_RADIUS && (distance < minDistance)) {
+				hoveredNode = i;
+				minDistance = distance;
+			}
+		}
+		return hoveredNode;
+	}
+
 	function update(inputManager, events) {
 		if (inputManager.isKeyPressed(KeyboardKey.ESCAPE)) {
 			this.switchScene(new TitleScene());
@@ -389,8 +407,8 @@ class MainScene : AbstractScene {
 		}
 
 		mousePos = inputManager.getMousePosition();
-		xMouse = 1.0 * mousePos[0];
-		yMouse = 1.0 * mousePos[1];
+		this.xMouse = 1.0 * mousePos[0];
+		this.yMouse = 1.0 * mousePos[1];
 
 		for (e : events) {
 			switch (e.type) {
@@ -410,18 +428,27 @@ class MainScene : AbstractScene {
 							}
 							break;
 						case GameState.SELECTING:
-							// Augment selection.
-							xMin = Math.min(this.selectionStart[0], this.selectionEnd[0]);
-							xMax = Math.max(this.selectionStart[0], this.selectionEnd[0]);
-							yMin = Math.min(this.selectionStart[1], this.selectionEnd[1]);
-							yMax = Math.max(this.selectionStart[1], this.selectionEnd[1]);
-							for (i = 0; i < this.nodes.length; ++i) {
-								node = this.nodes[i];
-								if (xMin <= node[0] && node[0] <= xMax && yMin <= node[1] && node[1] <= yMax) {
-									this.selection[i] = true;
+							if (this.selectionStart[0] == this.selectionEnd[0] && this.selectionStart[1] == this.selectionEnd[1]) {
+								// Single selection.
+								selectedNode = this.getHoveredNode();
+								if (selectedNode != null) {
+									this.selection[selectedNode] = !this.selection[selectedNode];
 								}
+								this.state = GameState.NEUTRAL;
+							} else {
+								// Group selection.
+								xMin = Math.min(this.selectionStart[0], this.selectionEnd[0]);
+								xMax = Math.max(this.selectionStart[0], this.selectionEnd[0]);
+								yMin = Math.min(this.selectionStart[1], this.selectionEnd[1]);
+								yMax = Math.max(this.selectionStart[1], this.selectionEnd[1]);
+								for (i = 0; i < this.nodes.length; ++i) {
+									node = this.nodes[i];
+									if (xMin <= node[0] && node[0] <= xMax && yMin <= node[1] && node[1] <= yMax) {
+										this.selection[i] = !this.selection[i];
+									}
+								}
+								this.state = GameState.NEUTRAL;
 							}
-							this.state = GameState.NEUTRAL;
 							break;
 						default:
 							break;
@@ -437,15 +464,7 @@ class MainScene : AbstractScene {
 								this.selectionEnd = mousePos.clone();
 							} else {
 								// Dragging.
-								this.clickedNode = null;
-								minDistance = 2 * NODE_RADIUS;
-								for (i = 0; i < this.nodes.length; ++i) {
-									distance = ((this.nodes[i][0] - xMouse) ** 2 + (this.nodes[i][1] - yMouse) ** 2) ** 0.5;
-									if (distance <= NODE_RADIUS && (distance < minDistance)) {
-										this.clickedNode = i;
-										minDistance = distance;
-									}
-								}
+								this.clickedNode = this.getHoveredNode();
 								if (this.clickedNode != null) {
 									// Move clicked node and attached edges to the front.
 									this.moveToFront(this.clickedNode);
@@ -464,8 +483,8 @@ class MainScene : AbstractScene {
 					}
 					break;
 				case EventType.MOUSE_MOVE:
-					dx = xMouse - this.lastMousePos[0];
-					dy = yMouse - this.lastMousePos[1];
+					dx = this.xMouse - this.lastMousePos[0];
+					dy = this.yMouse - this.lastMousePos[1];
 					switch (this.state) {
 						case GameState.DRAGGING:
 							this.nodes[this.clickedNode][0] += dx;
