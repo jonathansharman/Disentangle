@@ -25,12 +25,11 @@ const COLOR_VALUE = 0.9;
 enum GameMode { CASUAL, TIMED, MOVES }
 
 enum GameState
-	{ GAME_OVER
+	{ OVER
 	, WON
 	, NEUTRAL
-	, DRAG_SINGLE
+	, DRAGGING
 	, SELECTING
-	, SELECTED
 	}
 
 class MainScene : AbstractScene {
@@ -56,8 +55,6 @@ class MainScene : AbstractScene {
 	field maxMoves;
 	field movesLeft;
 
-	field gameOver = false;
-
 	// Draw order and color maps
 	field nodeDrawOrder = [];
 	field nodeColors = [];
@@ -66,9 +63,11 @@ class MainScene : AbstractScene {
 
 	// Dragging
 	field clickedNode;
+	field dragStart;
+	field lastMousePos = [0, 0];
 
-	// Selecting/selected
-	field selection = {};
+	// Node selection
+	field selection;
 	field selectionStart;
 	field selectionEnd;
 
@@ -78,6 +77,9 @@ class MainScene : AbstractScene {
 		this.gameMode = gameMode;
 		this.nodeCount = nodeCount;
 		this.nodeCountText = Font.font.setColor(0, 0, 0).render(" " + this.nodeCount + " ");
+
+		// Nodes start unselected.
+		this.selection = [false] * nodeCount;
 
 		// Initialize nodes in a circle.
 		this.nodes = [];
@@ -108,12 +110,6 @@ class MainScene : AbstractScene {
 		// Relax nodes to generate a good-looking initial layout.
 		this.relax(300);
 
-		this.maxLevelTime = MAX_TIME_PER_EDGE * this.edges.length;
-		this.levelTimer = this.maxLevelTime;
-
-		this.maxMoves = MAX_MOVES_PER_EDGE * this.edges.length;
-		this.movesLeft = this.maxMoves;
-
 		// Set draw orders and colors.
 		for (i = 0; i < this.nodes.length; ++i) {
 			this.nodeDrawOrder.add(i);
@@ -138,6 +134,20 @@ class MainScene : AbstractScene {
 				, COLOR_SATURATION
 				, COLOR_VALUE
 				));
+		}
+
+		// Mode-specific initialization.
+		switch (this.gameMode) {
+			case GameMode.CASUAL:
+				break;
+			case GameMode.TIMED:
+				this.maxLevelTime = MAX_TIME_PER_EDGE * this.edges.length;
+				this.levelTimer = this.maxLevelTime;
+				break;
+			case GameMode.MOVES:
+				this.maxMoves = MAX_MOVES_PER_EDGE * this.edges.length;
+				this.movesLeft = this.maxMoves;
+				break;
 		}
 	}
 
@@ -291,7 +301,9 @@ class MainScene : AbstractScene {
 	// Pushes nodes away from each other and away from the edges.
 	function relax(iterations) {
 		for (i = 0; i < iterations; ++i) {
-			for (node : this.nodes) {
+			for (j = 0; j < this.nodes.length; ++j) {
+				if (this.selection[j] || j == this.clickedNode) continue;
+				node = this.nodes[j];
 				wallForceFactor = 0.0005;
 				vel =
 					[ wallForceFactor * (X_RES / 2 - node[0])
@@ -356,7 +368,7 @@ class MainScene : AbstractScene {
 	}
 
 	function endGame() {
-		this.gameOver = true;
+		this.state = GameState.OVER;
 		this.bgColor = [212, 159, 159];
 	}
 
@@ -366,112 +378,131 @@ class MainScene : AbstractScene {
 			return;
 		}
 
-		if (this.winTimer == 0) {
-			--this.levelTimer;
-		}
-
-		if (this.winTimer > 0) {
+		if (this.state == GameState.WON) {
 			--this.winTimer;
 			if (this.winTimer == 0) {
 				this.switchScene(new LoadingScene(this.gameMode, this.nodeCount + 1));
 			}
 			return;
+		} else if (this.gameMode == GameMode.TIMED) {
+			--this.levelTimer;
 		}
 
 		mousePos = inputManager.getMousePosition();
 		xMouse = 1.0 * mousePos[0];
 		yMouse = 1.0 * mousePos[1];
 
-		if (!this.gameOver) {
-			for (e : events) {
-				switch (e.type) {
-					case EventType.MOUSE_RELEASE:
-						switch (this.state) {
-							case GameState.NEUTRAL:
-								break;
-							case GameState.DRAG_SINGLE:
-								// Release clicked node.
+		for (e : events) {
+			switch (e.type) {
+				case EventType.MOUSE_RELEASE:
+					switch (this.state) {
+						case GameState.DRAGGING:
+							// Release clicked node.
+							if (this.gameMode == GameMode.MOVES) {
 								--this.movesLeft;
+							}
+							this.clickedNode = null;
+							if (this.solved) {
+								this.winTimer = WIN_TIMER_LENGTH;
+								this.state = GameState.WON;
+							} else {
+								this.state = GameState.NEUTRAL;
+							}
+							break;
+						case GameState.SELECTING:
+							// Augment selection.
+							xMin = Math.min(this.selectionStart[0], this.selectionEnd[0]);
+							xMax = Math.max(this.selectionStart[0], this.selectionEnd[0]);
+							yMin = Math.min(this.selectionStart[1], this.selectionEnd[1]);
+							yMax = Math.max(this.selectionStart[1], this.selectionEnd[1]);
+							for (i = 0; i < this.nodes.length; ++i) {
+								node = this.nodes[i];
+								if (xMin <= node[0] && node[0] <= xMax && yMin <= node[1] && node[1] <= yMax) {
+									this.selection[i] = true;
+								}
+							}
+							this.state = GameState.NEUTRAL;
+							break;
+						default:
+							break;
+					}
+					break;
+				case EventType.MOUSE_PRESS:
+					switch (this.state) {
+						case GameState.NEUTRAL:
+							if (inputManager.isShiftPressed()) {
+								// Selecting.
+								this.state = GameState.SELECTING;
+								this.selectionStart = mousePos.clone();
+								this.selectionEnd = mousePos.clone();
+							} else {
+								// Dragging.
 								this.clickedNode = null;
-								if (this.solved && this.winTimer == 0) {
-									this.winTimer = WIN_TIMER_LENGTH;
-								}
-								this.state = GameState.NEUTRAL;
-								break;
-							case GameState.SELECTING:
-								// Create selection.
-								this.state = GameState.SELECTED;
-								xMin = Math.min(this.selectionStart[0], this.selectionEnd[0]);
-								xMax = Math.max(this.selectionStart[0], this.selectionEnd[0]);
-								yMin = Math.min(this.selectionStart[1], this.selectionEnd[1]);
-								yMax = Math.max(this.selectionStart[1], this.selectionEnd[1]);
-								this.selection = {};
+								minDistance = 2 * NODE_RADIUS;
 								for (i = 0; i < this.nodes.length; ++i) {
-									node = this.nodes[i];
-									if (xMin <= node[0] && node[0] <= xMax && yMin <= node[1] && node[1] <= yMax) {
-										this.selection[i] = null;
+									distance = ((this.nodes[i][0] - xMouse) ** 2 + (this.nodes[i][1] - yMouse) ** 2) ** 0.5;
+									if (distance <= NODE_RADIUS && (distance < minDistance)) {
+										this.clickedNode = i;
+										minDistance = distance;
 									}
 								}
-								this.state = this.selection.length == 0 ? GameState.NEUTRAL : GameState.SELECTED;
-								break;
-							case GameState.SELECTED:
-								// Unselect.
-								this.state = GameState.NEUTRAL;
-								break;
-						}
-						break;
-					case EventType.MOUSE_PRESS:
-						switch (this.state) {
-							case GameState.NEUTRAL:
-								if (inputManager.isShiftPressed()) {
-									// Group selection.
-									this.state = GameState.SELECTING;
-									this.selectionStart = mousePos.clone();
-								} else {
-									// Single-node selection.
-									this.clickedNode = null;
-									minDistance = 2 * NODE_RADIUS;
-									for (i = 0; i < this.nodes.length; ++i) {
-										distance = ((this.nodes[i][0] - xMouse) ** 2 + (this.nodes[i][1] - yMouse) ** 2) ** 0.5;
-										if (distance <= NODE_RADIUS && (distance < minDistance)) {
-											this.clickedNode = i;
-											minDistance = distance;
-										}
-									}
-									if (this.clickedNode != null) {
-										// Move clicked node and attached edges to the front.
-										this.moveToFront(this.clickedNode);
-										this.state = GameState.DRAG_SINGLE;
-									}
+								if (this.clickedNode != null) {
+									// Move clicked node and attached edges to the front.
+									this.moveToFront(this.clickedNode);
+									// Start dragging.
+									this.state = GameState.DRAGGING;
+									this.dragStart = mousePos.clone();
 								}
-								break;
-							case GameState.DRAG_SINGLE:
-								break;
-							case GameState.SELECTING:
-								break;
-							case GameState.SELECTED:
-								// Check for drag.
-								break;
-						}
-						break;
-					default:
-						break;
+								// Deselect all if a selected node was not clicked.
+								if (this.clickedNode == null || !this.selection[this.clickedNode]) {
+									this.selection = [false] * this.nodes.length;
+								}
+							}
+							break;
+						default:
+							break;
+					}
+					break;
+				case EventType.MOUSE_MOVE:
+					dx = xMouse - this.lastMousePos[0];
+					dy = yMouse - this.lastMousePos[1];
+					switch (this.state) {
+						case GameState.DRAGGING:
+							this.nodes[this.clickedNode][0] += dx;
+							this.nodes[this.clickedNode][1] += dy;
+							// Also drag any selected nodes (except clicked node, since it was already dragged).
+							for (i = 0; i < this.nodes.length; ++i) {
+								if (this.selection[i] && i != this.clickedNode) {
+									this.nodes[i][0] += dx;
+									this.nodes[i][1] += dy;
+								}
+							}
+							break;
+						case GameState.SELECTING:
+							this.selectionEnd[0] += dx;
+							this.selectionEnd[1] += dy;
+							break;
+						default:
+							break;
+					}
+					this.lastMousePos = mousePos;
+					break;
+				default:
+					break;
+			}
+		}
+
+		// Allow free manual relaxation if the game is on.
+		switch (this.state) {
+			case GameState.OVER:
+				break;
+			case GameState.WON:
+				break;
+			default:
+				if (inputManager.isKeyPressed(KeyboardKey.SPACE)) {
+					this.relax(1);
 				}
-			}
-			if (this.state == GameState.SELECTING) {
-				this.selectionEnd = mousePos.clone();
-			}
-		}
-
-		// Allow free manual relaxation if game is not over.
-		if (!this.gameOver && this.winTimer == 0 && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
-			this.relax(1);
-		}
-
-		// Clicked node follows mouse.
-		if (this.state == GameState.DRAG_SINGLE && !this.gameOver) {
-			this.nodes[this.clickedNode][0] = xMouse;
-			this.nodes[this.clickedNode][1] = yMouse;
+				break;
 		}
 
 		// Find intersections and detect solutions.
@@ -509,7 +540,7 @@ class MainScene : AbstractScene {
 	function drawEdges() {
 		for (i = 0; i < this.edgeDrawOrder.length; ++i) {
 			j = this.edgeDrawOrder[i];
-			alpha = this.solved && this.winTimer > 0
+			alpha = this.state == GameState.WON
 				? 64 * this.winTimer / WIN_TIMER_LENGTH
 				: this.intersectMap[j] ? 255 : 64;
 			x1 = this.nodes[this.edges[j][0]][0];
@@ -527,8 +558,8 @@ class MainScene : AbstractScene {
 	function drawNodes() {
 		for (i = 0; i < this.nodeDrawOrder.length; ++i) {
 			j = this.nodeDrawOrder[i];
-			nodeColor = this.selection.contains(j) ? [255, 255, 255] : this.nodeColors[j];
-			if (this.solved && this.winTimer > 0) {
+			nodeColor = this.selection[j] ? [255, 255, 255] : this.nodeColors[j];
+			if (this.state == GameState.WON) {
 				alpha = 64 * this.winTimer / WIN_TIMER_LENGTH;
 			} else {
 				badNode = false;
@@ -540,14 +571,16 @@ class MainScene : AbstractScene {
 				alpha = badNode ? 255 : 64;
 			}
 			// Draw node outline.
+			x = this.nodes[j][0] - NODE_RADIUS;
+			y = this.nodes[j][1] - NODE_RADIUS;
 			Graphics2D.Draw.ellipse
-				( this.nodes[j][0] - NODE_RADIUS, this.nodes[j][1] - NODE_RADIUS
+				( x, y
 				, 2 * NODE_RADIUS, 2 * NODE_RADIUS
 				, 0, 0, 0, alpha
 				);
 			// Draw node fill.
 			Graphics2D.Draw.ellipse
-				( this.nodes[j][0] - NODE_RADIUS + NODE_BORDER, this.nodes[j][1] - NODE_RADIUS + NODE_BORDER
+				( x + NODE_BORDER, y + NODE_BORDER
 				, 2 * NODE_RADIUS - 2 * NODE_BORDER, 2 * NODE_RADIUS - 2 * NODE_BORDER
 				, nodeColor[0], nodeColor[1], nodeColor[2], alpha
 				);
@@ -555,7 +588,7 @@ class MainScene : AbstractScene {
 	}
 
 	function drawOverlay() {
-		if (this.gameOver) {
+		if (this.state == GameState.OVER) {
 			Graphics2D.Draw.rectangle
 				( 0, 0
 				, this.resetText.width, this.resetText.height
@@ -565,32 +598,27 @@ class MainScene : AbstractScene {
 		} else {
 			switch (this.gameMode) {
 				case GameMode.CASUAL:
-					// Nothing special to draw in this mode.
 					break;
 				case GameMode.TIMED:
 					// Draw timer.
-					alpha = this.solved && this.winTimer > 0 ? 64 * this.winTimer / WIN_TIMER_LENGTH : 64;
-					if (this.levelTimer != null) {
-						Graphics2D.Draw.rectangle
-							( 0, 0
-							, X_RES * this.levelTimer / this.maxLevelTime, BAR_HEIGHT
-							, 0, 0, 0, alpha
-							);
-					}
+					alpha = this.state == GameState.WON ? 64 * this.winTimer / WIN_TIMER_LENGTH : 64;
+					Graphics2D.Draw.rectangle
+						( 0, 0
+						, X_RES * this.levelTimer / this.maxLevelTime, BAR_HEIGHT
+						, 0, 0, 0, alpha
+						);
 					break;
 				case GameMode.MOVES:
 					// Draw move counter.
-					alpha = this.solved && this.winTimer > 0 ? 64 * this.winTimer / WIN_TIMER_LENGTH : 64;
-					if (this.movesLeft != null) {
-						for (i = 0; i < this.movesLeft; ++i) {
-							start = i * X_RES / this.maxMoves + 1;
-							end = Math.min(X_RES - 1, (i + 1) * X_RES / this.maxMoves);
-							Graphics2D.Draw.rectangle
-								( start, 1
-								, end - start, BAR_HEIGHT - 1
-								, 0, 0, 0, alpha
-								);
-						}
+					alpha = this.state == GameState.WON ? 64 * this.winTimer / WIN_TIMER_LENGTH : 64;
+					for (i = 0; i < this.movesLeft; ++i) {
+						start = i * X_RES / this.maxMoves + 1;
+						end = Math.min(X_RES - 1, (i + 1) * X_RES / this.maxMoves);
+						Graphics2D.Draw.rectangle
+							( start, 1
+							, end - start, BAR_HEIGHT - 1
+							, 0, 0, 0, alpha
+							);
 					}
 					break;
 			}
@@ -607,8 +635,10 @@ class MainScene : AbstractScene {
 
 	function render() {
 		Graphics2D.Draw.fill(this.bgColor[0], this.bgColor[1], this.bgColor[2]);
+
 		this.drawEdges();
 		this.drawNodes();
+
 		// Draw selection box.
 		if (this.state == GameState.SELECTING) {
 			x = Math.min(this.selectionStart[0], this.selectionEnd[0]);
@@ -621,6 +651,7 @@ class MainScene : AbstractScene {
 			Graphics2D.Draw.line(x + width, y, x + width, y + height, 1, 0, 0, 0);
 			Graphics2D.Draw.line(x, y + height, x + width, y + height, 1, 0, 0, 0);
 		}
+
 		this.drawOverlay();
 	}
 }

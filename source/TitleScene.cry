@@ -9,16 +9,48 @@ const DFLT_NODE_COUNT = 8;
 const MIN_REPEAT_DELAY = 2;
 const MAX_REPEAT_DELAY = 20;
 
+class Option {
+	field index;
+	field image;
+	field position;
+	field gameMode;
+	field key;
+
+	constructor(index, text, gameMode, key) {
+		this.index = index;
+		this.image = Font.font.setColor(0, 0, 0).render(text);
+		this.position =
+			[ X_RES / 2 - this.image.width / 2
+			, Y_RES / 2 + 40 * index - this.image.height / 2
+			];
+		this.gameMode = gameMode;
+		this.key = key;
+	}
+
+	function selected(inputManager) {
+		if (inputManager.isKeyPressed(this.key)) {
+			return true;
+		}
+		if (inputManager.didMouseClickHere(this.position[0], this.position[1], this.image.width, this.image.height)) {
+			return true;
+		}
+		if (inputManager.isKeyPressed(KeyboardKey.SPACE) || inputManager.isKeyPressed(KeyboardKey.ENTER) && TitleScene.selection == this.index) {
+			return true;
+		}
+		return false;
+	}
+}
+
 class TitleScene : AbstractScene {
 	static field nodeCount = DFLT_NODE_COUNT;
 	static field selection = 0;
 
-	field font = FontResource
+	field title = FontResource
 		.fromSystem("Times New Roman")
 		.getRenderer()
-		.setSize(20)
-		.setColor(0, 0, 0);
-	field title;
+		.setSize(36)
+		.setColor(0, 0, 0)
+		.render("Disentangle");
 	field options;
 
 	field framesHoldingLeft= 0;
@@ -28,13 +60,10 @@ class TitleScene : AbstractScene {
 	field pressDirection = 0;
 
 	constructor() : base() {
-		this.title = this.font.setSize(36).render("Disentangle");
-		this.font.setSize(20);
-		this.options =
-			[ this.font.render(" 1) Casual mode ")
-			, this.font.render(" 2) Timed mode ")
-			, this.font.render(" 3) Move-counted mode ")
-			];
+		this.options = [];
+		this.options.add(new Option(0, " 1) Casual mode ", GameMode.CASUAL, KeyboardKey.NUM_1));
+		this.options.add(new Option(1, " 2) Timed mode ", GameMode.CASUAL, KeyboardKey.NUM_2));
+		this.options.add(new Option(2, " 3) Move-counted mode ", GameMode.CASUAL, KeyboardKey.NUM_3));
 	}
 
 	function update(inputManager, events) {
@@ -80,25 +109,12 @@ class TitleScene : AbstractScene {
 			this.repeatCounter = MAX_REPEAT_DELAY;
 		}
 
-		// Begin game.
-		if (inputManager.isKeyPressed(KeyboardKey.NUM_1)) {
-			this.switchScene(new LoadingScene(GameMode.CASUAL, TitleScene.nodeCount));
-		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_2)) {
-			this.switchScene(new LoadingScene(GameMode.TIMED, TitleScene.nodeCount));
-		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_3)) {
-			this.switchScene(new LoadingScene(GameMode.MOVES, TitleScene.nodeCount));
-		}
-		if (inputManager.isKeyPressed(KeyboardKey.SPACE) || inputManager.isKeyPressed(KeyboardKey.ENTER)) {
-			switch (TitleScene.selection) {
-				case 0:
-					this.switchScene(new LoadingScene(GameMode.CASUAL, TitleScene.nodeCount));
-					return;
-				case 1:
-					this.switchScene(new LoadingScene(GameMode.TIMED, TitleScene.nodeCount));
-					return;
-				case 2:
-					this.switchScene(new LoadingScene(GameMode.MOVES, TitleScene.nodeCount));
-					return;
+		// Begin game when an option is selected.
+		for (i = 0; i < this.options.length; ++i) {
+			if (this.options[i].selected(inputManager)) {
+				TitleScene.selection = i;
+				this.switchScene(new LoadingScene(this.options[i].gameMode, TitleScene.nodeCount));
+				return;
 			}
 		}
 	}
@@ -110,22 +126,23 @@ class TitleScene : AbstractScene {
 			, Y_RES / 4 - this.title.height / 2
 			);
 		for (i = 0; i < this.options.length; ++i) {
+			option = this.options[i];
 			if (i == TitleScene.selection) {
 				Graphics2D.Draw.rectangle
-					( X_RES / 2 - this.options[i].width / 2
-					, Y_RES / 2 - this.options[i].height / 2 + 40 * i
-					, this.options[i].width
-					, this.options[i].height
+					( option.position[0]
+					, option.position[1]
+					, option.image.width
+					, option.image.height
 					, 160, 160, 160
 					);
 			}
-			this.options[i].draw
-				( X_RES / 2 - this.options[i].width / 2
-				, Y_RES / 2 - this.options[i].height / 2 + 40 * i
+			option.image.draw
+				( option.position[0]
+				, option.position[1]
 				);
 		}
 
-		nodeCountText = this.font.render("< " + TitleScene.nodeCount + " >");
+		nodeCountText = Font.font.render("< " + TitleScene.nodeCount + " >");
 		nodeCountText.draw
 			( X_RES / 2 - nodeCountText.width / 2
 			, 4 * Y_RES / 5 - nodeCountText.height / 2
