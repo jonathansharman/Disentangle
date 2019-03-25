@@ -1,0 +1,8 @@
+import Graphics2DText;
+
+class Font {
+	static field font = FontResource
+		.fromSystem("Times New Roman")
+		.getRenderer()
+		.setSize(20);
+}

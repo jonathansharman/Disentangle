@@ -1,13 +1,10 @@
 import Graphics2D;
 import Graphics2DText;
-import Math;
-import Random;
 import TwoCansAlpha2;
 
 class LoadingScene : AbstractScene {
-	field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(20);
 	field nodeCountText;
-	field loadingText = this.font.setColor(128, 128, 128).render("Loading...");
+	field loadingText = Font.font.setColor(128, 128, 128).render("Loading...");
 	field firstFrame = true;
 
 	field gameMode;
@@ -16,7 +13,7 @@ class LoadingScene : AbstractScene {
 	constructor(gameMode, nodeCount) : base() {
 		this.gameMode = gameMode;
 		this.nodeCount = nodeCount;
-		this.nodeCountText = this.font.setColor(0, 0, 0).render(" " + this.nodeCount + " ");
+		this.nodeCountText = Font.font.setColor(0, 0, 0).render(" " + this.nodeCount + " ");
 	}
 
 	function update(inputManager, events) {

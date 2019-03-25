@@ -24,18 +24,18 @@ const COLOR_VALUE = 0.9;
 
 enum GameMode { CASUAL, TIMED, MOVES }
 
-enum GameState {
-	LOADING,
-	NEUTRAL,
-	DRAG_SINGLE,
-	SELECTING,
-	SELECTED
-}
+enum GameState
+	{ GAME_OVER
+	, WON
+	, NEUTRAL
+	, DRAG_SINGLE
+	, SELECTING
+	, SELECTED
+	}
 
 class MainScene : AbstractScene {
-	field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(20);
 	field nodeCountText;
-	field resetText = this.font.setColor(0, 0, 0).render(" Press Esc to return to main menu.");
+	field resetText = Font.font.setColor(0, 0, 0).render(" Press Esc to return to main menu.");
 
 	// Game mode and state
 	field gameMode;
@@ -72,10 +72,12 @@ class MainScene : AbstractScene {
 	field selectionStart;
 	field selectionEnd;
 
+	field bgColor = [212, 212, 212];
+
 	constructor(gameMode, nodeCount) : base() {
 		this.gameMode = gameMode;
 		this.nodeCount = nodeCount;
-		this.nodeCountText = this.font.setColor(0, 0, 0).render(" " + this.nodeCount + " ");
+		this.nodeCountText = Font.font.setColor(0, 0, 0).render(" " + this.nodeCount + " ");
 
 		// Initialize nodes in a circle.
 		this.nodes = [];
@@ -353,6 +355,11 @@ class MainScene : AbstractScene {
 		this.edgeColors.concat(edgeColorsPartition[1]);
 	}
 
+	function endGame() {
+		this.gameOver = true;
+		this.bgColor = [212, 159, 159];
+	}
+
 	function update(inputManager, events) {
 		if (inputManager.isKeyPressed(KeyboardKey.ESCAPE)) {
 			this.switchScene(new TitleScene());
@@ -488,46 +495,36 @@ class MainScene : AbstractScene {
 				break;
 			case GameMode.TIMED:
 				if (!this.solved && this.levelTimer == 0) {
-					this.gameOver = true;
+					this.endGame();
 				}
 				break;
 			case GameMode.MOVES:
 				if (!this.solved && this.movesLeft == 0) {
-					this.gameOver = true;
+					this.endGame();
 				}
 				break;
 		}
 	}
 
-	function render() {
-		bgColor = this.gameOver ? [212, 159, 159] : [212, 212, 212];
-
-		Graphics2D.Draw.fill(bgColor[0], bgColor[1], bgColor[2]);
-
-		// Draw edges.
+	function drawEdges() {
 		for (i = 0; i < this.edgeDrawOrder.length; ++i) {
 			j = this.edgeDrawOrder[i];
 			alpha = this.solved && this.winTimer > 0
 				? 64 * this.winTimer / WIN_TIMER_LENGTH
 				: this.intersectMap[j] ? 255 : 64;
+			x1 = this.nodes[this.edges[j][0]][0];
+			y1 = this.nodes[this.edges[j][0]][1];
+			x2 = this.nodes[this.edges[j][1]][0];
+			y2 = this.nodes[this.edges[j][1]][1];
 			// Draw edge outline.
-			Graphics2D.Draw.line
-				( this.nodes[this.edges[j][0]][0], this.nodes[this.edges[j][0]][1]
-				, this.nodes[this.edges[j][1]][0], this.nodes[this.edges[j][1]][1]
-				, EDGE_WIDTH + 2
-				, 0, 0, 0, alpha
-				);
+			Graphics2D.Draw.line(x1, y1, x2, y2, EDGE_WIDTH + 2, 0, 0, 0, alpha);
 			// Draw edge fill.
 			edgeColor = this.edgeColors[i];
-			Graphics2D.Draw.line
-				( this.nodes[this.edges[j][0]][0], this.nodes[this.edges[j][0]][1]
-				, this.nodes[this.edges[j][1]][0], this.nodes[this.edges[j][1]][1]
-				, EDGE_WIDTH
-				, edgeColor[0], edgeColor[1], edgeColor[2], alpha
-				);
+			Graphics2D.Draw.line(x1, y1, x2, y2, EDGE_WIDTH, edgeColor[0], edgeColor[1], edgeColor[2], alpha);
 		}
+	}
 
-		// Draw nodes.
+	function drawNodes() {
 		for (i = 0; i < this.nodeDrawOrder.length; ++i) {
 			j = this.nodeDrawOrder[i];
 			nodeColor = this.selection.contains(j) ? [255, 255, 255] : this.nodeColors[j];
@@ -555,13 +552,14 @@ class MainScene : AbstractScene {
 				, nodeColor[0], nodeColor[1], nodeColor[2], alpha
 				);
 		}
+	}
 
-		// Draw overlays.
+	function drawOverlay() {
 		if (this.gameOver) {
 			Graphics2D.Draw.rectangle
 				( 0, 0
 				, this.resetText.width, this.resetText.height
-				, bgColor[0], bgColor[1], bgColor[2], 192
+				, this.bgColor[0], this.bgColor[1], this.bgColor[2], 192
 				);
 			this.resetText.draw(0, 0);
 		} else {
@@ -598,6 +596,19 @@ class MainScene : AbstractScene {
 			}
 		}
 
+		// Draw node count.
+		Graphics2D.Draw.rectangle
+			( 0, Y_RES - this.nodeCountText.height
+			, this.nodeCountText.width, this.nodeCountText.height
+			, this.bgColor[0], this.bgColor[1], this.bgColor[2], 192
+			);
+		this.nodeCountText.draw(0, Y_RES - this.nodeCountText.height);
+	}
+
+	function render() {
+		Graphics2D.Draw.fill(this.bgColor[0], this.bgColor[1], this.bgColor[2]);
+		this.drawEdges();
+		this.drawNodes();
 		// Draw selection box.
 		if (this.state == GameState.SELECTING) {
 			x = Math.min(this.selectionStart[0], this.selectionEnd[0]);
@@ -610,13 +621,6 @@ class MainScene : AbstractScene {
 			Graphics2D.Draw.line(x + width, y, x + width, y + height, 1, 0, 0, 0);
 			Graphics2D.Draw.line(x, y + height, x + width, y + height, 1, 0, 0, 0);
 		}
-
-		// Draw node count.
-		Graphics2D.Draw.rectangle
-			( 0, Y_RES - this.nodeCountText.height
-			, this.nodeCountText.width, this.nodeCountText.height
-			, bgColor[0], bgColor[1], bgColor[2], 192
-			);
-		this.nodeCountText.draw(0, Y_RES - this.nodeCountText.height);
+		this.drawOverlay();
 	}
 }
