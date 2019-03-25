@@ -24,18 +24,23 @@ const COLOR_VALUE = 0.9;
 
 enum GameMode { CASUAL, TIMED, MOVES }
 
+enum GameState {
+	LOADING,
+	NEUTRAL,
+	DRAG_SINGLE,
+	SELECTING,
+	SELECTED
+}
+
 class MainScene : AbstractScene {
 	field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(20);
-	field levelText;
-	field resetText = this.font.setColor(0, 0, 0).render("Press Esc to return to main menu.");
+	field nodeCountText;
+	field resetText = this.font.setColor(0, 0, 0).render(" Press Esc to return to main menu.");
 
-	field loaded = false;
-	field loadNextFrame = false;
-	field loadingText = this.font.setColor(128, 128, 128).render("Loading...");
-
+	// Game mode and state
 	field gameMode;
+	field state = GameState.NEUTRAL;
 
-	field clickedNode;
 	field nodeCount;
 	field nodes = [];
 	field edges = [];
@@ -43,28 +48,95 @@ class MainScene : AbstractScene {
 	field intersectMap;
 	field winTimer = 0;
 
+	// Timed mode
 	field maxLevelTime;
 	field levelTimer;
 
+	// Move-counted mode
 	field maxMoves;
 	field movesLeft;
 
 	field gameOver = false;
 
-	field nodeDrawOrder;
-	field nodeColors;
-	field edgeDrawOrder;
-	field edgeColors;
+	// Draw order and color maps
+	field nodeDrawOrder = [];
+	field nodeColors = [];
+	field edgeDrawOrder = [];
+	field edgeColors = [];
 
-	field selection = [];
-	field selecting = false;
+	// Dragging
+	field clickedNode;
+
+	// Selecting/selected
+	field selection = {};
 	field selectionStart;
 	field selectionEnd;
 
 	constructor(gameMode, nodeCount) : base() {
 		this.gameMode = gameMode;
 		this.nodeCount = nodeCount;
-		this.levelText = this.font.setColor(0, 0, 0).render(this.nodeCount);
+		this.nodeCountText = this.font.setColor(0, 0, 0).render(" " + this.nodeCount + " ");
+
+		// Initialize nodes in a circle.
+		this.nodes = [];
+		for (i = 0; i < this.nodeCount; ++i) {
+			theta = i * 2 * Math.PI / this.nodeCount;
+			offset = Math.min(X_RES, Y_RES) / 2 - 20;
+			this.nodes.add([X_RES / 2 + offset * Math.cos(theta), Y_RES / 2 + offset * Math.sin(theta)]);
+		}
+
+		// Recursively connect all remaining nodes while retaining planarity.
+		this.edges = [];
+		this.planarConnect(0, this.nodes.length);
+
+		// Randomize node positions until there's an intersection.
+		foundIntersection = false;
+		do {
+			this.randomizeNodes();
+			for (i = 0; !foundIntersection && i < this.edges.length - 1; ++i) {
+				for (j = i + 1; j < this.edges.length; ++j) {
+					if (this.intersect(this.edges[i], this.edges[j])) {
+						foundIntersection = true;
+						break;
+					}
+				}
+			}
+		} while (!foundIntersection);
+
+		// Relax nodes to generate a good-looking initial layout.
+		this.relax(300);
+
+		this.maxLevelTime = MAX_TIME_PER_EDGE * this.edges.length;
+		this.levelTimer = this.maxLevelTime;
+
+		this.maxMoves = MAX_MOVES_PER_EDGE * this.edges.length;
+		this.movesLeft = this.maxMoves;
+
+		// Set draw orders and colors.
+		for (i = 0; i < this.nodes.length; ++i) {
+			this.nodeDrawOrder.add(i);
+		}
+		// Shuffle node draw order (and therefore color assignment) to avoid giving hints.
+		this.nodeDrawOrder.shuffle();
+		for (i = 0; i < this.nodes.length; ++i) {
+			this.nodeColors.add(MainScene.hsvToRgb
+				( this.nodeDrawOrder[i] * 360.0 / this.nodes.length
+				, COLOR_SATURATION
+				, COLOR_VALUE
+				));
+		}
+		// Shuffle initial edge draw order, which also determines color.
+		for (i = 0; i < this.edges.length; ++i) {
+			this.edgeDrawOrder.add(i);
+		}
+		this.edgeDrawOrder.shuffle();
+		for (i = 0; i < this.edges.length; ++i) {
+			this.edgeColors.add(MainScene.hsvToRgb
+				( this.edgeDrawOrder[i] * 360.0 / this.edges.length
+				, COLOR_SATURATION
+				, COLOR_VALUE
+				));
+		}
 	}
 
 	// Computes x mod y, where x and y are nonnegative floating-point numbers.
@@ -214,78 +286,6 @@ class MainScene : AbstractScene {
 		this.planarConnect(i, start + distance - i, depth + 1);
 	}
 
-	// Reset the game.
-	function reset() {
-		this.clickedNode = null;
-
-		// Initialize nodes in a circle.
-		this.nodes = [];
-		for (i = 0; i < this.nodeCount; ++i) {
-			theta = i * 2 * Math.PI / this.nodeCount;
-			offset = Math.min(X_RES, Y_RES) / 2 - 20;
-			this.nodes.add([X_RES / 2 + offset * Math.cos(theta), Y_RES / 2 + offset * Math.sin(theta)]);
-		}
-
-		// Recursively connect all remaining nodes while retaining planarity.
-		this.edges = [];
-		this.planarConnect(0, this.nodes.length);
-
-		// Randomize node positions until there's an intersection.
-		foundIntersection = false;
-		do {
-			this.randomizeNodes();
-			for (i = 0; !foundIntersection && i < this.edges.length - 1; ++i) {
-				for (j = i + 1; j < this.edges.length; ++j) {
-					if (this.intersect(this.edges[i], this.edges[j])) {
-						foundIntersection = true;
-						break;
-					}
-				}
-			}
-		} while (!foundIntersection);
-
-		// Relax nodes to generate a good-looking initial layout.
-		this.relax(300);
-
-		this.levelText = this.font.setColor(0, 0, 0).render(this.nodes.length);
-
-		this.maxLevelTime = MAX_TIME_PER_EDGE * this.edges.length;
-		this.levelTimer = this.maxLevelTime;
-
-		this.maxMoves = MAX_MOVES_PER_EDGE * this.edges.length;
-		this.movesLeft = this.maxMoves;
-
-		// Set draw orders and colors.
-		this.nodeDrawOrder = [];
-		for (i = 0; i < this.nodes.length; ++i) {
-			this.nodeDrawOrder.add(i);
-		}
-		// Shuffle node draw order (and therefore color assignment) to avoid giving hints.
-		this.nodeDrawOrder.shuffle();
-		this.nodeColors = [];
-		for (i = 0; i < this.nodes.length; ++i) {
-			this.nodeColors.add(MainScene.hsvToRgb
-				( this.nodeDrawOrder[i] * 360.0 / this.nodes.length
-				, COLOR_SATURATION
-				, COLOR_VALUE
-				));
-		}
-		// Shuffle initial edge draw order, which also determines color.
-		this.edgeDrawOrder = [];
-		for (i = 0; i < this.edges.length; ++i) {
-			this.edgeDrawOrder.add(i);
-		}
-		this.edgeDrawOrder.shuffle();
-		this.edgeColors = [];
-		for (i = 0; i < this.edges.length; ++i) {
-			this.edgeColors.add(MainScene.hsvToRgb
-				( this.edgeDrawOrder[i] * 360.0 / this.edges.length
-				, COLOR_SATURATION
-				, COLOR_VALUE
-				));
-		}
-	}
-
 	// Pushes nodes away from each other and away from the edges.
 	function relax(iterations) {
 		for (i = 0; i < iterations; ++i) {
@@ -354,15 +354,6 @@ class MainScene : AbstractScene {
 	}
 
 	function update(inputManager, events) {
-		if (this.loadNextFrame) {
-			this.reset();
-			this.loaded = true;
-			this.loadNextFrame = false;
-		} else if (!this.loaded) {
-			this.loadNextFrame = true;
-			return;
-		}
-
 		if (inputManager.isKeyPressed(KeyboardKey.ESCAPE)) {
 			this.switchScene(new TitleScene());
 			return;
@@ -373,12 +364,10 @@ class MainScene : AbstractScene {
 		}
 
 		if (this.winTimer > 0) {
-			if (this.winTimer == 1) {
-				++this.nodeCount;
-				this.loaded = false;
-				this.loadNextFrame = false;
-			}
 			--this.winTimer;
+			if (this.winTimer == 0) {
+				this.switchScene(new LoadingScene(this.gameMode, this.nodeCount + 1));
+			}
 			return;
 		}
 
@@ -390,43 +379,90 @@ class MainScene : AbstractScene {
 			for (e : events) {
 				switch (e.type) {
 					case EventType.MOUSE_RELEASE:
-						// Release clicked node, if any.
-						if (this.clickedNode != null) {
-							--this.movesLeft;
-							this.clickedNode = null;
-							if (this.solved && this.winTimer == 0) {
-								this.winTimer = WIN_TIMER_LENGTH;
-							}
+						switch (this.state) {
+							case GameState.NEUTRAL:
+								break;
+							case GameState.DRAG_SINGLE:
+								// Release clicked node.
+								--this.movesLeft;
+								this.clickedNode = null;
+								if (this.solved && this.winTimer == 0) {
+									this.winTimer = WIN_TIMER_LENGTH;
+								}
+								this.state = GameState.NEUTRAL;
+								break;
+							case GameState.SELECTING:
+								// Create selection.
+								this.state = GameState.SELECTED;
+								xMin = Math.min(this.selectionStart[0], this.selectionEnd[0]);
+								xMax = Math.max(this.selectionStart[0], this.selectionEnd[0]);
+								yMin = Math.min(this.selectionStart[1], this.selectionEnd[1]);
+								yMax = Math.max(this.selectionStart[1], this.selectionEnd[1]);
+								this.selection = {};
+								for (i = 0; i < this.nodes.length; ++i) {
+									node = this.nodes[i];
+									if (xMin <= node[0] && node[0] <= xMax && yMin <= node[1] && node[1] <= yMax) {
+										this.selection[i] = null;
+									}
+								}
+								this.state = this.selection.length == 0 ? GameState.NEUTRAL : GameState.SELECTED;
+								break;
+							case GameState.SELECTED:
+								// Unselect.
+								this.state = GameState.NEUTRAL;
+								break;
 						}
 						break;
 					case EventType.MOUSE_PRESS:
-						// Find clicked node, if any.
-						minDistance = 2 * NODE_RADIUS;
-						for (i = 0; i < this.nodes.length; ++i) {
-							distance = ((this.nodes[i][0] - xMouse) ** 2 + (this.nodes[i][1] - yMouse) ** 2) ** 0.5;
-							if (distance <= NODE_RADIUS && (distance < minDistance)) {
-								this.clickedNode = i;
-								minDistance = distance;
-							}
-						}
-						if (this.clickedNode != null) {
-							// Move clicked node and attached edges to the front.
-							this.moveToFront(this.clickedNode);
+						switch (this.state) {
+							case GameState.NEUTRAL:
+								if (inputManager.isShiftPressed()) {
+									// Group selection.
+									this.state = GameState.SELECTING;
+									this.selectionStart = mousePos.clone();
+								} else {
+									// Single-node selection.
+									this.clickedNode = null;
+									minDistance = 2 * NODE_RADIUS;
+									for (i = 0; i < this.nodes.length; ++i) {
+										distance = ((this.nodes[i][0] - xMouse) ** 2 + (this.nodes[i][1] - yMouse) ** 2) ** 0.5;
+										if (distance <= NODE_RADIUS && (distance < minDistance)) {
+											this.clickedNode = i;
+											minDistance = distance;
+										}
+									}
+									if (this.clickedNode != null) {
+										// Move clicked node and attached edges to the front.
+										this.moveToFront(this.clickedNode);
+										this.state = GameState.DRAG_SINGLE;
+									}
+								}
+								break;
+							case GameState.DRAG_SINGLE:
+								break;
+							case GameState.SELECTING:
+								break;
+							case GameState.SELECTED:
+								// Check for drag.
+								break;
 						}
 						break;
 					default:
 						break;
 				}
-			}	
+			}
+			if (this.state == GameState.SELECTING) {
+				this.selectionEnd = mousePos.clone();
+			}
 		}
 
-		// Allow free manual antigravitation if game is not over.
+		// Allow free manual relaxation if game is not over.
 		if (!this.gameOver && this.winTimer == 0 && inputManager.isKeyPressed(KeyboardKey.SPACE)) {
 			this.relax(1);
 		}
 
 		// Clicked node follows mouse.
-		if (this.clickedNode != null && !this.gameOver) {
+		if (this.state == GameState.DRAG_SINGLE && !this.gameOver) {
 			this.nodes[this.clickedNode][0] = xMouse;
 			this.nodes[this.clickedNode][1] = yMouse;
 		}
@@ -468,64 +504,56 @@ class MainScene : AbstractScene {
 
 		Graphics2D.Draw.fill(bgColor[0], bgColor[1], bgColor[2]);
 
-		if (!this.loaded) {
-			this.loadingText.draw
-				( X_RES / 2 - this.loadingText.width / 2
-				, Y_RES / 2 - this.loadingText.height / 2
+		// Draw edges.
+		for (i = 0; i < this.edgeDrawOrder.length; ++i) {
+			j = this.edgeDrawOrder[i];
+			alpha = this.solved && this.winTimer > 0
+				? 64 * this.winTimer / WIN_TIMER_LENGTH
+				: this.intersectMap[j] ? 255 : 64;
+			// Draw edge outline.
+			Graphics2D.Draw.line
+				( this.nodes[this.edges[j][0]][0], this.nodes[this.edges[j][0]][1]
+				, this.nodes[this.edges[j][1]][0], this.nodes[this.edges[j][1]][1]
+				, EDGE_WIDTH + 2
+				, 0, 0, 0, alpha
 				);
-		} else {
-			// Draw edges.
-			for (i = 0; i < this.edgeDrawOrder.length; ++i) {
-				j = this.edgeDrawOrder[i];
-				alpha = this.solved && this.winTimer > 0
-					? 64 * this.winTimer / WIN_TIMER_LENGTH
-					: this.intersectMap[j] ? 255 : 64;
-				// Draw edge outline.
-				Graphics2D.Draw.line
-					( this.nodes[this.edges[j][0]][0], this.nodes[this.edges[j][0]][1]
-					, this.nodes[this.edges[j][1]][0], this.nodes[this.edges[j][1]][1]
-					, EDGE_WIDTH + 2
-					, 0, 0, 0, alpha
-					);
-				// Draw edge fill.
-				edgeColor = this.edgeColors[i];
-				Graphics2D.Draw.line
-					( this.nodes[this.edges[j][0]][0], this.nodes[this.edges[j][0]][1]
-					, this.nodes[this.edges[j][1]][0], this.nodes[this.edges[j][1]][1]
-					, EDGE_WIDTH
-					, edgeColor[0], edgeColor[1], edgeColor[2], alpha
-					);
-			}
+			// Draw edge fill.
+			edgeColor = this.edgeColors[i];
+			Graphics2D.Draw.line
+				( this.nodes[this.edges[j][0]][0], this.nodes[this.edges[j][0]][1]
+				, this.nodes[this.edges[j][1]][0], this.nodes[this.edges[j][1]][1]
+				, EDGE_WIDTH
+				, edgeColor[0], edgeColor[1], edgeColor[2], alpha
+				);
+		}
 
-			// Draw nodes.
-			for (i = 0; i < this.nodeDrawOrder.length; ++i) {
-				j = this.nodeDrawOrder[i];
-				nodeColor = MainScene.hsvToRgb(j * 360.0 / this.nodes.length, COLOR_SATURATION, COLOR_VALUE);
-				nodeColor = this.nodeColors[j];
-				if (this.solved && this.winTimer > 0) {
-					alpha = 64 * this.winTimer / WIN_TIMER_LENGTH;
-				} else {
-					badNode = false;
-					for (k = 0; k < this.edges.length; ++k) {
-						if (this.edges[k][0] == j || this.edges[k][1] == j) {
-							badNode = badNode || this.intersectMap[k];
-						}
+		// Draw nodes.
+		for (i = 0; i < this.nodeDrawOrder.length; ++i) {
+			j = this.nodeDrawOrder[i];
+			nodeColor = this.selection.contains(j) ? [255, 255, 255] : this.nodeColors[j];
+			if (this.solved && this.winTimer > 0) {
+				alpha = 64 * this.winTimer / WIN_TIMER_LENGTH;
+			} else {
+				badNode = false;
+				for (k = 0; k < this.edges.length; ++k) {
+					if (this.edges[k][0] == j || this.edges[k][1] == j) {
+						badNode = badNode || this.intersectMap[k];
 					}
-					alpha = badNode ? 255 : 64;
 				}
-				// Draw node outline.
-				Graphics2D.Draw.ellipse
-					( this.nodes[j][0] - NODE_RADIUS, this.nodes[j][1] - NODE_RADIUS
-					, 2 * NODE_RADIUS, 2 * NODE_RADIUS
-					, 0, 0, 0, alpha
-					);
-				// Draw node fill.
-				Graphics2D.Draw.ellipse
-					( this.nodes[j][0] - NODE_RADIUS + NODE_BORDER, this.nodes[j][1] - NODE_RADIUS + NODE_BORDER
-					, 2 * NODE_RADIUS - 2 * NODE_BORDER, 2 * NODE_RADIUS - 2 * NODE_BORDER
-					, nodeColor[0], nodeColor[1], nodeColor[2], alpha
-					);
+				alpha = badNode ? 255 : 64;
 			}
+			// Draw node outline.
+			Graphics2D.Draw.ellipse
+				( this.nodes[j][0] - NODE_RADIUS, this.nodes[j][1] - NODE_RADIUS
+				, 2 * NODE_RADIUS, 2 * NODE_RADIUS
+				, 0, 0, 0, alpha
+				);
+			// Draw node fill.
+			Graphics2D.Draw.ellipse
+				( this.nodes[j][0] - NODE_RADIUS + NODE_BORDER, this.nodes[j][1] - NODE_RADIUS + NODE_BORDER
+				, 2 * NODE_RADIUS - 2 * NODE_BORDER, 2 * NODE_RADIUS - 2 * NODE_BORDER
+				, nodeColor[0], nodeColor[1], nodeColor[2], alpha
+				);
 		}
 
 		// Draw overlays.
@@ -543,16 +571,18 @@ class MainScene : AbstractScene {
 					break;
 				case GameMode.TIMED:
 					// Draw timer.
+					alpha = this.solved && this.winTimer > 0 ? 64 * this.winTimer / WIN_TIMER_LENGTH : 64;
 					if (this.levelTimer != null) {
 						Graphics2D.Draw.rectangle
 							( 0, 0
 							, X_RES * this.levelTimer / this.maxLevelTime, BAR_HEIGHT
-							, 0, 0, 0, 64
+							, 0, 0, 0, alpha
 							);
 					}
 					break;
 				case GameMode.MOVES:
 					// Draw move counter.
+					alpha = this.solved && this.winTimer > 0 ? 64 * this.winTimer / WIN_TIMER_LENGTH : 64;
 					if (this.movesLeft != null) {
 						for (i = 0; i < this.movesLeft; ++i) {
 							start = i * X_RES / this.maxMoves + 1;
@@ -560,7 +590,7 @@ class MainScene : AbstractScene {
 							Graphics2D.Draw.rectangle
 								( start, 1
 								, end - start, BAR_HEIGHT - 1
-								, 0, 0, 0, 64
+								, 0, 0, 0, alpha
 								);
 						}
 					}
@@ -569,21 +599,24 @@ class MainScene : AbstractScene {
 		}
 
 		// Draw selection box.
-		if (this.selecting) {
-			x = this.selectionStart[0];
-			y = this.selectionStart[1];
-			width = this.selectionEnd[0] - this.selectionStart[0];
-			height = this.selectionEnd[1] - this.selectionStart[1];
-			Graphics2D.Draw.rectangle(x, y, width, height, 0, 0, 0);
-			Graphics2D.Draw.rectangle(x + 1, y + 1, width - 2, height - 2, 255, 255, 255, 128);
+		if (this.state == GameState.SELECTING) {
+			x = Math.min(this.selectionStart[0], this.selectionEnd[0]);
+			y = Math.min(this.selectionStart[1], this.selectionEnd[1]);
+			width = Math.abs(this.selectionEnd[0] - this.selectionStart[0]);
+			height = Math.abs(this.selectionEnd[1] - this.selectionStart[1]);
+			Graphics2D.Draw.rectangle(x, y, width, height, 255, 255, 255, 128);
+			Graphics2D.Draw.line(x, y, x + width, y, 1, 0, 0, 0);
+			Graphics2D.Draw.line(x, y, x, y + height, 1, 0, 0, 0);
+			Graphics2D.Draw.line(x + width, y, x + width, y + height, 1, 0, 0, 0);
+			Graphics2D.Draw.line(x, y + height, x + width, y + height, 1, 0, 0, 0);
 		}
 
-		// Draw current number of nodes.
+		// Draw node count.
 		Graphics2D.Draw.rectangle
-			( 0, Y_RES - this.levelText.height
-			, this.levelText.width, this.levelText.height
+			( 0, Y_RES - this.nodeCountText.height
+			, this.nodeCountText.width, this.nodeCountText.height
 			, bgColor[0], bgColor[1], bgColor[2], 192
 			);
-		this.levelText.draw(0, Y_RES - this.levelText.height);
+		this.nodeCountText.draw(0, Y_RES - this.nodeCountText.height);
 	}
 }

@@ -31,21 +31,14 @@ class TitleScene : AbstractScene {
 		this.title = this.font.setSize(36).render("Disentangle");
 		this.font.setSize(20);
 		this.options =
-			[ this.font.render("1) Casual mode")
-			, this.font.render("2) Timed mode")
-			, this.font.render("3) Move-counted mode")
+			[ this.font.render(" 1) Casual mode ")
+			, this.font.render(" 2) Timed mode ")
+			, this.font.render(" 3) Move-counted mode ")
 			];
 	}
 
 	function update(inputManager, events) {
-		// Choose mode with arrow keys / numbers.
-		if (inputManager.isKeyPressed(KeyboardKey.NUM_1)) {
-			this.switchScene(new MainScene(GameMode.CASUAL, TitleScene.nodeCount));
-		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_2)) {
-			this.switchScene(new MainScene(GameMode.TIMED, TitleScene.nodeCount));
-		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_3)) {
-			this.switchScene(new MainScene(GameMode.MOVES, TitleScene.nodeCount));
-		}
+		// Change mode selection.
 		if (inputManager.isKeyPressedThisFrame(KeyboardKey.UP)) {
 			TitleScene.selection = (TitleScene.selection - 1) % this.options.length;
 		}
@@ -88,16 +81,23 @@ class TitleScene : AbstractScene {
 		}
 
 		// Begin game.
+		if (inputManager.isKeyPressed(KeyboardKey.NUM_1)) {
+			this.switchScene(new LoadingScene(GameMode.CASUAL, TitleScene.nodeCount));
+		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_2)) {
+			this.switchScene(new LoadingScene(GameMode.TIMED, TitleScene.nodeCount));
+		} else if (inputManager.isKeyPressed(KeyboardKey.NUM_3)) {
+			this.switchScene(new LoadingScene(GameMode.MOVES, TitleScene.nodeCount));
+		}
 		if (inputManager.isKeyPressed(KeyboardKey.SPACE) || inputManager.isKeyPressed(KeyboardKey.ENTER)) {
 			switch (TitleScene.selection) {
 				case 0:
-					this.switchScene(new MainScene(GameMode.CASUAL, TitleScene.nodeCount));
+					this.switchScene(new LoadingScene(GameMode.CASUAL, TitleScene.nodeCount));
 					return;
 				case 1:
-					this.switchScene(new MainScene(GameMode.TIMED, TitleScene.nodeCount));
+					this.switchScene(new LoadingScene(GameMode.TIMED, TitleScene.nodeCount));
 					return;
 				case 2:
-					this.switchScene(new MainScene(GameMode.MOVES, TitleScene.nodeCount));
+					this.switchScene(new LoadingScene(GameMode.MOVES, TitleScene.nodeCount));
 					return;
 			}
 		}

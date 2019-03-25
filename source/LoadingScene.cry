@@ -1,0 +1,42 @@
+import Graphics2D;
+import Graphics2DText;
+import Math;
+import Random;
+import TwoCansAlpha2;
+
+class LoadingScene : AbstractScene {
+	field font = FontResource.fromSystem("Times New Roman").getRenderer().setSize(20);
+	field nodeCountText;
+	field loadingText = this.font.setColor(128, 128, 128).render("Loading...");
+	field firstFrame = true;
+
+	field gameMode;
+	field nodeCount;
+
+	constructor(gameMode, nodeCount) : base() {
+		this.gameMode = gameMode;
+		this.nodeCount = nodeCount;
+		this.nodeCountText = this.font.setColor(0, 0, 0).render(" " + this.nodeCount + " ");
+	}
+
+	function update(inputManager, events) {
+		if (this.firstFrame) {
+			this.firstFrame = false;
+		} else {
+			this.switchScene(new MainScene(this.gameMode, this.nodeCount));
+		}
+	}
+
+	function render() {
+		Graphics2D.Draw.fill(212, 212, 212);
+
+		// Draw loading text.
+		this.loadingText.draw
+			( X_RES / 2 - this.loadingText.width / 2
+			, Y_RES / 2 - this.loadingText.height / 2
+			);
+
+		// Draw node count.
+		this.nodeCountText.draw(0, Y_RES - this.nodeCountText.height);
+	}
+}
