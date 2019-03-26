@@ -319,9 +319,13 @@ class MainScene : AbstractScene {
 	// Pushes nodes away from each other and away from the edges.
 	function relax(iterations) {
 		for (i = 0; i < iterations; ++i) {
+			nextNodes = [];
 			for (j = 0; j < this.nodes.length; ++j) {
+				node = this.nodes[j].clone();
+				nextNodes.add(node);
+
 				if (this.selection[j] || j == this.clickedNode) continue;
-				node = this.nodes[j];
+
 				wallForceFactor = 0.00025 * Math.ln(this.nodes.length);
 				vel =
 					[ wallForceFactor * (X_RES / 2 - node[0])
@@ -338,12 +342,26 @@ class MainScene : AbstractScene {
 						}
 					}
 				}
+				for (edge : this.edges) {
+					if (edge[0] == j || edge[1] == j) {
+						// Contract.
+						otherNode = edge[0] == j ? this.nodes[edge[1]] : this.nodes[edge[0]];
+						dx = otherNode[0] - node[0];
+						dy = otherNode[1] - node[1];
+						elasticForceFactor = 0.00005;
+						vel[0] += elasticForceFactor * dx;
+						vel[1] += elasticForceFactor * dy;
+					} else {
+						// Do collision detection and response.
+						// TODO
+					}
+				}
 				velFactor = 15.0;
 				node[0] += velFactor * vel[0];
 				node[1] += velFactor * vel[1];
-
 				this.clamp(node);
 			}
+			this.nodes = nextNodes;
 		}
 	}
 
