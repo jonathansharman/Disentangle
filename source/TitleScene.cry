@@ -62,8 +62,8 @@ class TitleScene : AbstractScene {
 	constructor() : base() {
 		this.options = [];
 		this.options.add(new Option(0, " 1) Casual mode ", GameMode.CASUAL, KeyboardKey.NUM_1));
-		this.options.add(new Option(1, " 2) Timed mode ", GameMode.CASUAL, KeyboardKey.NUM_2));
-		this.options.add(new Option(2, " 3) Move-counted mode ", GameMode.CASUAL, KeyboardKey.NUM_3));
+		this.options.add(new Option(1, " 2) Timed mode ", GameMode.TIMED, KeyboardKey.NUM_2));
+		this.options.add(new Option(2, " 3) Move-counted mode ", GameMode.MOVES, KeyboardKey.NUM_3));
 	}
 
 	function update(inputManager, events) {

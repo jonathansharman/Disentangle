@@ -74,6 +74,7 @@ class MainScene : AbstractScene {
 	field selection;
 	field selectionStart;
 	field selectionEnd;
+	field selectionCentroid;
 
 	field bgColor = [212, 212, 212];
 
@@ -302,6 +303,20 @@ class MainScene : AbstractScene {
 		this.planarConnect(i, start + distance - i, depth + 1);
 	}
 
+	// Clamps the given node to within the game bounds.
+	function clamp(node) {
+		if (node[0] < 0.0) {
+			node[0] = 0.0;
+		} else if (node[0] >= X_RES) {
+			node[0] = X_RES - 1.0;
+		}
+		if (node[1] < 0.0) {
+			node[1] = 0.0;
+		} else if (node[1] >= Y_RES) {
+			node[1] = Y_RES - 1.0;
+		}
+	}
+
 	// Pushes nodes away from each other and away from the edges.
 	function relax(iterations) {
 		for (i = 0; i < iterations; ++i) {
@@ -328,16 +343,7 @@ class MainScene : AbstractScene {
 				node[0] += velFactor * vel[0];
 				node[1] += velFactor * vel[1];
 
-				if (node[0] < 0.0) {
-					node[0] = 0.0;
-				} else if (node[0] >= X_RES) {
-					node[0] = X_RES - 1.0;
-				}
-				if (node[1] < 0.0) {
-					node[1] = 0.0;
-				} else if (node[1] >= Y_RES) {
-					node[1] = Y_RES - 1.0;
-				}
+				this.clamp(node);
 			}
 		}
 	}
@@ -390,6 +396,21 @@ class MainScene : AbstractScene {
 		return hoveredNode;
 	}
 
+	// Sets the selection centroid. Requires at least one selected node.
+	function updateSelectionCentroid() {
+		x = 0.0;
+		y = 0.0;
+		n = 0;
+		for (i = 0; i < this.nodes.length; ++i) {
+			if (this.selection[i]) {
+				x += this.nodes[i][0];
+				y += this.nodes[i][1];
+				++n;
+			}
+		}
+		this.selectionCentroid = [x / n, y / n];
+	}
+
 	function update(inputManager, events) {
 		if (inputManager.isKeyPressed(KeyboardKey.ESCAPE)) {
 			this.switchScene(new TitleScene());
@@ -433,6 +454,7 @@ class MainScene : AbstractScene {
 								selectedNode = this.getHoveredNode();
 								if (selectedNode != null) {
 									this.selection[selectedNode] = !this.selection[selectedNode];
+									this.updateSelectionCentroid();
 								}
 								this.state = GameState.NEUTRAL;
 							} else {
@@ -447,6 +469,7 @@ class MainScene : AbstractScene {
 										this.selection[i] = !this.selection[i];
 									}
 								}
+								this.updateSelectionCentroid();
 								this.state = GameState.NEUTRAL;
 							}
 							break;
@@ -494,6 +517,7 @@ class MainScene : AbstractScene {
 								if (this.selection[i] && i != this.clickedNode) {
 									this.nodes[i][0] += dx;
 									this.nodes[i][1] += dy;
+									this.clamp(this.nodes[i]);
 								}
 							}
 							break;
@@ -518,8 +542,27 @@ class MainScene : AbstractScene {
 			case GameState.WON:
 				break;
 			default:
+				// Relax nodes.
 				if (inputManager.isKeyPressed(KeyboardKey.SPACE)) {
 					this.relax(1);
+				}
+				// Flip selected nodes horizontally.
+				if (inputManager.isKeyPressedThisFrame(KeyboardKey.H)) {
+					for (i = 0; i < this.nodes.length; ++i) {
+						if (this.selection[i]) {
+							this.nodes[i][0] = 2 * this.selectionCentroid[0] - this.nodes[i][0];
+							this.clamp(this.nodes[i]);
+						}
+					}
+				}
+				// Flip selected nodes vertically.
+				if (inputManager.isKeyPressedThisFrame(KeyboardKey.V)) {
+					for (i = 0; i < this.nodes.length; ++i) {
+						if (this.selection[i]) {
+							this.nodes[i][1] = 2 * this.selectionCentroid[1] - this.nodes[i][1];
+							this.clamp(this.nodes[i]);
+						}
+					}
 				}
 				break;
 		}
