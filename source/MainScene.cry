@@ -115,11 +115,10 @@ class MainScene : AbstractScene {
 		// Relax nodes to generate a good-looking initial layout.
 		this.relax(300);
 
-		// Set draw orders and colors.
+		// Shuffle node draw order and colors.
 		for (i = 0; i < this.nodes.length; ++i) {
 			this.nodeDrawOrder.add(i);
 		}
-		// Shuffle node draw order (and therefore color assignment) to avoid giving hints.
 		this.nodeDrawOrder.shuffle();
 		for (i = 0; i < this.nodes.length; ++i) {
 			this.nodeColors.add(MainScene.hsvToRgb
@@ -128,7 +127,7 @@ class MainScene : AbstractScene {
 				, COLOR_VALUE
 				));
 		}
-		// Shuffle initial edge draw order, which also determines color.
+		// Shuffle edge draw order and colors.
 		for (i = 0; i < this.edges.length; ++i) {
 			this.edgeDrawOrder.add(i);
 		}
@@ -323,7 +322,7 @@ class MainScene : AbstractScene {
 			for (j = 0; j < this.nodes.length; ++j) {
 				if (this.selection[j] || j == this.clickedNode) continue;
 				node = this.nodes[j];
-				wallForceFactor = 0.0005;
+				wallForceFactor = 0.00025 * Math.ln(this.nodes.length);
 				vel =
 					[ wallForceFactor * (X_RES / 2 - node[0])
 					, wallForceFactor * (Y_RES / 2 - node[1])
@@ -360,21 +359,16 @@ class MainScene : AbstractScene {
 		}
 		// Stably partition the edges, with attached edges in front.
 		edgeDrawOrderPartition = [[], []];
-		edgeColorsPartition = [[], []];
 		for (i = 0; i < this.edgeDrawOrder.length; ++i) {
 			edge = this.edges[this.edgeDrawOrder[i]];
 			if (edge[0] == index || edge[1] == index) {
 				edgeDrawOrderPartition[1].add(this.edgeDrawOrder[i]);
-				edgeColorsPartition[1].add(this.edgeColors[i]);
 			} else {
 				edgeDrawOrderPartition[0].add(this.edgeDrawOrder[i]);
-				edgeColorsPartition[0].add(this.edgeColors[i]);
 			}
 		}
 		this.edgeDrawOrder = edgeDrawOrderPartition[0];
 		this.edgeDrawOrder.concat(edgeDrawOrderPartition[1]);
-		this.edgeColors = edgeColorsPartition[0];
-		this.edgeColors.concat(edgeColorsPartition[1]);
 	}
 
 	function endGame() {
@@ -612,7 +606,7 @@ class MainScene : AbstractScene {
 			// Draw edge outline.
 			Graphics2D.Draw.line(x1, y1, x2, y2, EDGE_WIDTH + 2, 0, 0, 0, alpha);
 			// Draw edge fill.
-			edgeColor = this.edgeColors[i];
+			edgeColor = this.edgeColors[j];
 			Graphics2D.Draw.line(x1, y1, x2, y2, EDGE_WIDTH, edgeColor[0], edgeColor[1], edgeColor[2], alpha);
 		}
 	}
