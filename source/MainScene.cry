@@ -22,7 +22,7 @@ const WIN_TIMER_LENGTH = 75;
 const COLOR_SATURATION = 0.6;
 const COLOR_VALUE = 0.9;
 
-enum GameMode { CASUAL, TIMED, MOVES }
+enum GameMode { CASUAL, TIMED, COUNTED }
 
 enum GameState
 	{ OVER
@@ -44,7 +44,9 @@ class MainScene : AbstractScene {
 	field nodes = [];
 	field edges = [];
 	field solved = false;
-	field intersectMap;
+	field badEdgeMap;
+	field badNodeMap;
+	field nodeToEdgesMap;
 	field winTimer = 0;
 
 	// Mouse position
@@ -98,22 +100,34 @@ class MainScene : AbstractScene {
 		this.edges = [];
 		this.planarConnect(0, this.nodes.length);
 
+		// Map the edges attached to each node.
+		this.nodeToEdgesMap = [];
+		for (i = 0; i < this.nodes.length; ++i) {
+			this.nodeToEdgesMap.add([]);
+			for (j = 0; j < this.edges.length; ++j) {
+				if (this.edges[j][0] == this.nodes[i] || this.edges[j][1] == this.nodes[i]) {
+					this.nodeToEdgesMap[i].add(j);
+				}
+			}
+		}
+
 		// Randomize node positions until there's an intersection.
 		foundIntersection = false;
 		do {
 			this.randomizeNodes();
 			for (i = 0; !foundIntersection && i < this.edges.length - 1; ++i) {
 				for (j = i + 1; j < this.edges.length; ++j) {
-					if (this.intersect(this.edges[i], this.edges[j])) {
+					if (this.edgeEdgeIntersect(this.edges[i], this.edges[j])) {
 						foundIntersection = true;
 						break;
 					}
 				}
 			}
+			// Relax nodes to generate a good-looking initial layout.
+			this.relax(300, false);
 		} while (!foundIntersection);
 
-		// Relax nodes to generate a good-looking initial layout.
-		this.relax(300);
+		this.updateSolvedStatus();
 
 		// Shuffle node draw order and colors.
 		for (i = 0; i < this.nodes.length; ++i) {
@@ -148,7 +162,7 @@ class MainScene : AbstractScene {
 				this.maxLevelTime = MAX_TIME_PER_EDGE * this.edges.length;
 				this.levelTimer = this.maxLevelTime;
 				break;
-			case GameMode.MOVES:
+			case GameMode.COUNTED:
 				this.maxMoves = MAX_MOVES_PER_EDGE * this.edges.length;
 				this.movesLeft = this.maxMoves;
 				break;
@@ -199,7 +213,7 @@ class MainScene : AbstractScene {
 
 	// Checks for intersection between line segments.
 	// Adapted from https://stackoverflow.com/a/1968345/3217185.
-	function intersect(edge0, edge1) {
+	function edgeEdgeIntersect(edge0, edge1) {
 		// Edges that share a node do not intersect.
 		if (edge0[0] == edge1[0] || edge0[0] == edge1[1] || edge0[1] == edge1[0] || edge0[1] == edge1[1]) {
 			return false;
@@ -266,6 +280,70 @@ class MainScene : AbstractScene {
 		return s >= 0.0 && s <= 1.0 && t >= 0.0 && t <= 1.0;
 	}
 
+	// Find intersections and detect solutions.
+	function updateSolvedStatus() {
+		this.solved = true;
+		this.badEdgeMap = [false] * this.edges.length;
+		this.badNodeMap = [false] * this.nodes.length;
+		for (i = 0; i < this.edges.length - 1; ++i) {
+			for (j = i + 1; j < this.edges.length; ++j) {
+				if (this.edgeEdgeIntersect(this.edges[i], this.edges[j])) {
+					// Edges are bad.
+					this.badEdgeMap[i] = true;
+					this.badEdgeMap[j] = true;
+					// Attached nodes are bad.
+					this.badNodeMap[this.edges[i][0]] = true;
+					this.badNodeMap[this.edges[i][1]] = true;
+					this.badNodeMap[this.edges[j][0]] = true;
+					this.badNodeMap[this.edges[j][1]] = true;
+					// Graph is bad.
+					this.solved = false;
+				}
+			}
+		}
+	}
+
+	// Pushes the given node straight out from the given edge, if they are overlapping.
+	function pushNodeOutOfEdge(node, edge) {
+		edge0 = this.nodes[edge[0]];
+		edge1 = this.nodes[edge[1]];
+		// The vector from the start of the edge to the center of the node.
+		a = [node[0] - edge0[0], node[1] - edge0[1]];
+		// The vector from the start to the end of the edge.
+		b = [edge1[0] - edge0[0], edge1[1] - edge0[1]];
+		// Find the nearest point from the center of the node to the edge.
+		bSquared = b[0] * b[0] + b[1] * b[1];
+		if (bSquared == 0.0) {
+			// Zero-length edge.
+			return;
+		}
+		bLength = bSquared ** 0.5;
+		bHat = [b[0] / bLength, b[1] / bLength];
+		aDotBHat = a[0] * bHat[0] + a[1] * bHat[1];
+		aOntoB = [aDotBHat * bHat[0], aDotBHat * bHat[1]];
+		aOntoBSquared = aOntoB[0] * aOntoB[0] + aOntoB[1] * aOntoB[1];
+		if (aOntoBSquared < 0.0 || bSquared < aOntoBSquared) {
+			// p does not lie on the edge. There could be a partial overlap here, but that case is
+			// handled by node-node interaction, so it doesn't need to be handled separately here.
+			return;
+		}
+		// The point on the edge closest to the node.
+		p = [edge0[0] + aOntoB[0], edge0[1] + aOntoB[1]];
+		// Vector from point to node.
+		pNode = [node[0] - p[0], node[1] - p[1]];
+		pNodeSquared = pNode[0] * pNode[0] + pNode[1] * pNode[1];
+		if (pNodeSquared > NODE_RADIUS ** 2) {
+			// Not touching.
+			return;
+		} else {
+			// Touching. Push out.
+			pNodeLength = pNodeSquared ** 0.5;
+			pNodeHat = pNodeLength == 0.0 ? pNode : [pNode[0] / pNodeLength, pNode[1] / pNodeLength];
+			node[0] = p[0] + pNodeHat[0] * NODE_RADIUS;
+			node[1] = p[1] + pNodeHat[1] * NODE_RADIUS;
+		}
+	}
+
 	// Randomize node positions.
 	function randomizeNodes() {
 		for (i = 0; i < this.nodeCount; ++i) {
@@ -317,14 +395,21 @@ class MainScene : AbstractScene {
 	}
 
 	// Pushes nodes away from each other and away from the edges.
-	function relax(iterations) {
+	function relax(iterations, ignoreSolved = true) {
 		for (i = 0; i < iterations; ++i) {
 			nextNodes = [];
 			for (j = 0; j < this.nodes.length; ++j) {
-				node = this.nodes[j].clone();
+				node = this.nodes[j];
 				nextNodes.add(node);
 
-				if (this.selection[j] || j == this.clickedNode) continue;
+				if (ignoreSolved && !this.badNodeMap[j]) {
+					// Don't relax solved nodes.
+					continue;
+				}
+				if (this.selection[j] || j == this.clickedNode) {
+					// Don't relax selected nodes.
+					continue;
+				}
 
 				wallForceFactor = 0.00025 * Math.ln(this.nodes.length);
 				vel =
@@ -342,7 +427,8 @@ class MainScene : AbstractScene {
 						}
 					}
 				}
-				for (edge : this.edges) {
+				for (k = 0; k < this.edges.length; ++k) {
+					edge = this.edges[k];
 					if (edge[0] == j || edge[1] == j) {
 						// Contract.
 						otherNode = edge[0] == j ? this.nodes[edge[1]] : this.nodes[edge[0]];
@@ -352,8 +438,8 @@ class MainScene : AbstractScene {
 						vel[0] += elasticForceFactor * dx;
 						vel[1] += elasticForceFactor * dy;
 					} else {
-						// Do collision detection and response.
-						// TODO
+						// Do collision.
+						//this.pushNodeOutOfEdge(this.nodes[j], edge);
 					}
 				}
 				velFactor = 15.0;
@@ -449,7 +535,7 @@ class MainScene : AbstractScene {
 					switch (this.state) {
 						case GameState.DRAGGING:
 							// Release clicked node.
-							if (this.gameMode == GameMode.MOVES) {
+							if (this.gameMode == GameMode.COUNTED) {
 								--this.movesLeft;
 							}
 							this.clickedNode = null;
@@ -580,19 +666,7 @@ class MainScene : AbstractScene {
 		}
 
 		// Find intersections and detect solutions.
-		this.solved = true;
-		this.intersectMap = [];
-		for (i = 0; i < this.edges.length; ++i) {
-			foundIntersection = false;
-			for (otherEdge : this.edges) {
-				if (otherEdge != this.edges[i] && this.intersect(this.edges[i], otherEdge)) {
-					foundIntersection = true;
-					this.solved = false;
-					break;
-				}
-			}
-			this.intersectMap.add(foundIntersection);
-		}
+		this.updateSolvedStatus();
 
 		// Check for game over.
 		switch (this.gameMode) {
@@ -603,7 +677,7 @@ class MainScene : AbstractScene {
 					this.endGame();
 				}
 				break;
-			case GameMode.MOVES:
+			case GameMode.COUNTED:
 				if (!this.solved && this.movesLeft == 0) {
 					this.endGame();
 				}
@@ -616,7 +690,7 @@ class MainScene : AbstractScene {
 			j = this.edgeDrawOrder[i];
 			alpha = this.state == GameState.WON
 				? 64 * this.winTimer / WIN_TIMER_LENGTH
-				: this.intersectMap[j] ? 255 : 64;
+				: this.badEdgeMap[j] ? 255 : 64;
 			x1 = this.nodes[this.edges[j][0]][0];
 			y1 = this.nodes[this.edges[j][0]][1];
 			x2 = this.nodes[this.edges[j][1]][0];
@@ -636,13 +710,7 @@ class MainScene : AbstractScene {
 			if (this.state == GameState.WON) {
 				alpha = 64 * this.winTimer / WIN_TIMER_LENGTH;
 			} else {
-				badNode = false;
-				for (k = 0; k < this.edges.length; ++k) {
-					if (this.edges[k][0] == j || this.edges[k][1] == j) {
-						badNode = badNode || this.intersectMap[k];
-					}
-				}
-				alpha = badNode ? 255 : 64;
+				alpha = this.badNodeMap[j] ? 255 : 64;
 			}
 			// Draw node outline.
 			x = this.nodes[j][0] - NODE_RADIUS;
@@ -682,7 +750,7 @@ class MainScene : AbstractScene {
 						, 0, 0, 0, alpha
 						);
 					break;
-				case GameMode.MOVES:
+				case GameMode.COUNTED:
 					// Draw move counter.
 					alpha = this.state == GameState.WON ? 64 * this.winTimer / WIN_TIMER_LENGTH : 64;
 					for (i = 0; i < this.movesLeft; ++i) {
