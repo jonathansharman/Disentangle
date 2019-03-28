@@ -34,8 +34,10 @@ class Option {
 		if (inputManager.didMouseClickHere(this.position[0], this.position[1], this.image.width, this.image.height)) {
 			return true;
 		}
-		if (inputManager.isKeyPressed(KeyboardKey.SPACE) || inputManager.isKeyPressed(KeyboardKey.ENTER) && TitleScene.selection == this.index) {
-			return true;
+		if (inputManager.isKeyPressed(KeyboardKey.SPACE) || inputManager.isKeyPressed(KeyboardKey.ENTER)) {
+			if (TitleScene.selection == this.index) {
+				return true;
+			}
 		}
 		return false;
 	}
@@ -61,9 +63,9 @@ class TitleScene : AbstractScene {
 
 	constructor() : base() {
 		this.options = [];
-		this.options.add(new Option(0, " 1) Casual mode ", GameMode.CASUAL, KeyboardKey.NUM_1));
-		this.options.add(new Option(1, " 2) Timed mode ", GameMode.TIMED, KeyboardKey.NUM_2));
-		this.options.add(new Option(2, " 3) Move-counted mode ", GameMode.MOVES, KeyboardKey.NUM_3));
+		this.options.add(new Option(0, " 1) 👶🍼 Casual ", GameMode.CASUAL, KeyboardKey.NUM_1));
+		this.options.add(new Option(1, " 2) 😰⏱ Timed ", GameMode.TIMED, KeyboardKey.NUM_2));
+		this.options.add(new Option(2, " 3) 🤔🔢 Counted ", GameMode.COUNTED, KeyboardKey.NUM_3));
 	}
 
 	function update(inputManager, events) {
