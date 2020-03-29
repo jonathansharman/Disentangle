@@ -1,7 +1,7 @@
 import Graphics2D;
 import Graphics2DText;
 import Math;
-import TwoCansAlpha2;
+import TwoCansAlpha4;
 
 const MIN_NODE_COUNT = 4;
 const DFLT_NODE_COUNT = 8;
